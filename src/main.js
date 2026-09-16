@@ -12,10 +12,11 @@ const modalLayer = $('#modal-layer');
 const modal = $('#modal');
 const startupWarnings = [];
 let persistenceEnabled = true;
+let settingsWereSaved = false;
 let save, settings;
 try { save = loadSave(localStorage); }
 catch (error) { save = freshSave(); persistenceEnabled = false; startupWarnings.push(`Save unavailable: ${error.message} Progress is session-only until you start a new pilgrimage or import a save.`); }
-try { settings = loadSettings(localStorage); }
+try { settings = loadSettings(localStorage); settingsWereSaved = localStorage.getItem(SETTINGS_KEY) !== null; }
 catch (error) { settings = { ...DEFAULT_SETTINGS }; startupWarnings.push(`Settings could not be loaded: ${error.message}`); }
 if (matchMedia('(prefers-reduced-motion: reduce)').matches) settings.reducedMotion = true;
 
@@ -23,7 +24,7 @@ let modalState = null;
 let toastTimer = null;
 let announcementTimer = null;
 let pendingVictory = null;
-let soundChosen = false;
+let soundChosen = settingsWereSaved;
 let wasTouch = false;
 let previousFocus = null;
 const input = new Input(canvas);

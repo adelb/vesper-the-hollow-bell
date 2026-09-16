@@ -75,6 +75,7 @@ export class Game {
 
   start() {
     const first = !this.save.started;
+    if (this.player.hp <= 0) this.loadChapter(this.save.chapter, this.save.checkpoint);
     this.save.started = true;
     this.mode = 'playing';
     this.persist();

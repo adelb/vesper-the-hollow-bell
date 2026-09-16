@@ -222,6 +222,18 @@ test('dying twice replaces the previous lost echoes', () => {
   assert.equal(game.save.bloodstain, null);
 });
 
+test('continuing from the title after death revives the player without losing the echo marker', () => {
+  const { game } = setup({ echoes: 100, checkpoint: 1 });
+  game.player.invulnerable = 0;
+  game.hurtPlayer(1000, null, false);
+  game.mode = 'menu';
+  game.start();
+  assert.equal(game.player.hp, game.maxHp);
+  assert.equal(game.player.x, game.level.checkpoint);
+  assert.equal(game.mode, 'playing');
+  assert.equal(game.save.bloodstain.amount, 100);
+});
+
 test('falling returns to safe ground and deals damage instead of soft-locking', () => {
   const { game } = setup();
   game.player.x = 700; game.player.y = 650; game.player.safeX = 600;

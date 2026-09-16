@@ -209,6 +209,14 @@ try {
   await expect(phone.getByRole('heading', { name: 'A moment of silence.' })).toBeVisible();
   await mobile.close();
 
+  await page.bringToFront();
+  await page.goto(baseURL, { waitUntil: 'networkidle' });
+  await page.locator('#sound-button').click();
+  await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('#begin-button').click();
+  await expect(page.locator('#sound-button')).toHaveAttribute('aria-pressed', 'false');
+
   assert.deepEqual(errors, [], `Browser errors:\n${errors.join('\n')}`);
   console.log(`Browser checks passed (${dev ? 'development: combat, all five gates, ending, persistence, audio, desktop and touch' : 'production: title, start, pause, persistence and touch'}).`);
   console.log(`Screenshots: ${output}`);
