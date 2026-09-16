@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/game.js';
 import { freshSave, DEFAULT_SETTINGS } from '../src/storage.js';
-import { CHAPTERS, PROLOGUE, ENEMY_CAST, NPCS } from '../src/content.js';
+import { CHAPTERS, PROLOGUE, ENTRANCES, ENEMY_CAST, NPCS } from '../src/content.js';
 import { SCORES, AudioEngine } from '../src/audio.js';
 
 function setup(overrides = {}) {
@@ -434,7 +434,7 @@ test('boss entrances freeze danger and shorten on later attempts', () => {
   game.player.x = game.level.arena;
   game.update(1 / 60);
   assert.equal(game.cinematic.kind, 'boss-intro');
-  assert.equal(game.cinematic.duration, 6.2);
+  assert.equal(game.cinematic.duration, ENTRANCES[0].duration);
   assert.deepEqual(game.save.introduced, [0]);
   game.player.invulnerable = 0;
   assert.equal(game.hurtPlayer(50, game.boss, false), false);
@@ -442,7 +442,7 @@ test('boss entrances freeze danger and shorten on later attempts', () => {
   game.die(); game.respawn();
   game.player.x = game.level.arena;
   game.update(1 / 60);
-  assert.equal(game.cinematic.duration, 3.2);
+  assert.equal(game.cinematic.duration, 4.2);
 });
 
 test('massive first-phase strikes cannot skip a guardian’s transformation', () => {

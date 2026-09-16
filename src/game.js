@@ -1,4 +1,4 @@
-import { CHAPTERS, HEIGHT, WIDTH, PROLOGUE, BOSS_DRAMA, ENEMY_CAST, NPCS } from './content.js';
+import { CHAPTERS, HEIGHT, WIDTH, PROLOGUE, BOSS_DRAMA, ENTRANCES, ENEMY_CAST, NPCS } from './content.js';
 import { ATTACKS, attackColor, parryableAttack, beamHits } from './attacks.js';
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
@@ -33,7 +33,7 @@ export class Game {
     this.save.chapter = index;
     this.save.checkpoint = checkpoint;
     this.platforms = this.level.platforms.map(([x, y, w]) => ({ x, y, w, h: y >= 390 ? HEIGHT - y + 120 : 18 }));
-    const x = checkpoint ? this.level.checkpoint : 155;
+    const x = this.level.lamps[checkpoint];
     this.player = {
       x, y: this.floorAt(x) - 48, w: 24, h: 48, vx: 0, vy: 0, facing: 1,
       hp: this.maxHp, stamina: 100, flasks: this.maxFlasks, grounded: true,
@@ -77,6 +77,7 @@ export class Game {
     this.bossCelebration = 0;
     this.hintTimer = 0;
     this.lastHint = '';
+    this.visitedDistricts = new Set(this.level.districts.filter(d => x >= d.x).map(d => d.name));
   }
 
   start() {
@@ -100,8 +101,9 @@ export class Game {
     p.vx = 0; p.attack = 0; p.queued = null; p.dash = 0; p.plunge = false;
     this.projectiles = []; this.zones = [];
     this.mode = 'cinematic';
-    this.cinematic = { kind, elapsed: 0, duration: kind === 'mutation' ? 4.8 : this.save.introduced.includes(this.save.chapter) ? 3.2 : 6.2, suspended: false };
+    this.cinematic = { kind, elapsed: 0, duration: kind === 'mutation' ? 4.8 : this.save.introduced.includes(this.save.chapter) ? 4.2 : ENTRANCES[this.save.chapter].duration, stage: 0, suspended: false };
     if (kind === 'boss-intro') {
+      p.x = this.level.arena + 225; p.y = this.floorAt(p.x) - p.h; p.vy = 0; p.grounded = true; p.facing = 1;
       this.save.introduced = [...new Set([...this.save.introduced, this.save.chapter])];
       this.persist();
     }
@@ -256,6 +258,13 @@ export class Game {
     if (this.mode === 'cinematic') {
       if (!this.cinematic.suspended) {
         this.cinematic.elapsed += dt;
+        if (this.cinematic.kind === 'boss-intro') {
+          const stage = this.cinematic.elapsed / this.cinematic.duration >= 0.56 ? 2 : this.cinematic.elapsed / this.cinematic.duration >= 0.24 ? 1 : 0;
+          if (stage > this.cinematic.stage) {
+            this.cinematic.stage = stage;
+            this.emit('sound', { name: stage === 1 ? 'entrance-rise' : 'entrance-reveal' });
+          }
+        }
         if (this.cinematic.kind === 'mutation' && this.cinematic.elapsed >= 2.1) this.mutateBoss();
         if (this.cinematic.elapsed >= this.cinematic.duration) this.advanceCinematic();
       }
@@ -380,6 +389,10 @@ export class Game {
     if (this.mode !== 'playing') return;
     this.updateProjectiles(dt);
     this.recoverEchoes();
+    for (const district of this.level.districts) if (p.x >= district.x && !this.visitedDistricts.has(district.name)) {
+      this.visitedDistricts.add(district.name);
+      this.emit('district', { district });
+    }
     if (input.take('interact')) this.interact();
     const targetCamera = clamp(p.x - WIDTH * 0.37 + p.facing * 45, 0, this.level.width - WIDTH);
     this.camera += (targetCamera - this.camera) * (1 - Math.exp(-dt * 5));
@@ -748,9 +761,11 @@ export class Game {
   get interaction() {
     const p = this.player;
     if (this.mode !== 'playing' || !p.grounded || this.boss.active) return null;
-    for (const [index, x] of [155, this.level.checkpoint].entries()) if (Math.abs(p.x - x) < 62 && p.y + p.h > 390) return { kind: 'checkpoint', index, text: index ? 'Rest at the wayward lamp' : 'Rest at the lamplighter’s refuge' };
+    for (const [index, x] of this.level.lamps.entries()) if (Math.abs(p.x - x) < 62 && p.y + p.h > 390) return { kind: 'checkpoint', index, text: index === 3 ? 'Rest before the guardian' : index ? 'Rest at the wayward lamp' : 'Rest at the lamplighter’s refuge' };
     if (Math.abs(p.x - this.npc.x) < 48 && p.y + p.h > 385) return { kind: 'npc', text: `Speak to ${this.npc.name}` };
     if (Math.abs(p.x - this.level.noteX) < 48 && p.y + p.h > 380 && !this.save.notes.includes(this.save.chapter)) return { kind: 'note', text: 'Read the forgotten letter' };
+    const memory = this.level.memories.find(m => !this.save.memories.includes(m.id) && Math.abs(p.x + p.w / 2 - m.x) < 42 && Math.abs(p.y + p.h - m.y) < 12);
+    if (memory) return { kind: 'memory', memory, text: 'Recover a sheltered memory' };
     if (p.x > this.level.width - 205 && this.boss.hp <= 0) return { kind: 'gate', text: this.save.chapter === 4 ? 'Speak to Mara' : 'Enter the next district' };
     return null;
   }
@@ -773,6 +788,14 @@ export class Game {
       this.mode = 'lore';
       this.persist();
       this.emit('lore', { note: this.level.note });
+    } else if (interaction.kind === 'memory') {
+      const memory = interaction.memory;
+      this.save.memories.push(memory.id);
+      this.save.echoes += memory.reward;
+      this.mode = 'lore';
+      this.persist();
+      this.emit('lore', { note: memory });
+      this.emit('sound', { name: 'recover' });
     } else if (this.save.chapter < 4) {
       this.enterChapter(this.save.chapter + 1);
     } else {

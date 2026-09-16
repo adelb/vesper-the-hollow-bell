@@ -1,3 +1,5 @@
+import { ENTRANCES } from './content.js';
+
 const frequency = midi => 440 * 2 ** ((midi - 69) / 12);
 export const SCORES = [
   { title: 'Gaslight, in Three', instrument: 'felt', root: 38, tempo: 72, meter: 6, chords: [0, -2, 3, -5], melody: [19, null, 15, 14, null, 12, 10, null, 14, 15, 7, null, 19, 22, 19, 15, null, 14, 12, null, 7, 10, 12, null], bass: [0, 7, 12], boss: 'The Warden’s Oath', mutation: 'A Cage of Burning Wings' },
@@ -6,6 +8,58 @@ export const SCORES = [
   { title: 'The Seventh Unmoving Star', instrument: 'glass', root: 42, tempo: 86, meter: 7, chords: [0, 1, -5, 3], melody: [24, 19, 13, 17, null, 20, 19, 12, 17, 19, 25, 24, null, 20, 19, null, 17, 13, 12, 7, null], bass: [0, 1, 7, 8], boss: 'The Shape of the Witness', mutation: 'Heaven Looking Inward' },
   { title: 'Everything We Could Not Keep', instrument: 'strings', root: 38, tempo: 64, meter: 10, chords: [0, 1, -2, -5], melody: [12, null, 13, null, 15, 19, null, 20, 19, null, 15, null, 13, 12, null, 7, null, 10, 12, null], bass: [0, 7, 8], boss: 'The Heart Learns Fear', mutation: 'A City’s Last Goodbye' },
 ];
+
+const RESPONSES = [
+  [22, null, 19, 17, 15, null, 14, 12, null, 10, 7, null, 15, 17, 19, null, 14, 10, 12, null, null, 7, 12, null],
+  [24, 20, null, 19, 15, 12, 14, null, 19, 20, 24, null, 27, null, 24, 20, 19, null, 15, 14, 12, 7, null, null],
+  [12, null, null, null, 15, null, null, null, 19, null, null, null, 22, null, 19, null, 17, null, null, null, 14, null, null, null, 12, null, null, null, null, null, 7, null],
+  [25, null, 24, 20, 19, null, 13, 17, 12, null, 19, 20, 24, null, 13, 12, 7, null, 8, 13, null],
+  [7, null, null, 10, 12, null, 13, null, 12, null, 19, null, 15, null, 13, 12, null, 7, null, null],
+];
+const MIX_GAIN = [1.12, 1, 0.85, 1.08, 0.5];
+
+export function scoreBeat(chapter, beat, boss = false, phase = 1) {
+  const score = SCORES[chapter], within = beat % score.meter, bar = Math.floor(beat / score.meter);
+  const section = Math.floor(bar / 4) % 4, chord = score.chords[(bar + (section === 3 ? 2 : 0)) % score.chords.length];
+  const melody = section % 2 ? RESPONSES[chapter] : score.melody, events = [];
+  const note = (voice, interval, length, volume, offset = 0) => events.push({ kind: 'note', voice, midi: score.root + interval, length, volume, offset });
+  const drum = (volume, offset = 0) => events.push({ kind: 'drum', volume, offset });
+  const air = (length, volume, cutoff, offset = 0) => events.push({ kind: 'noise', length, volume, cutoff, offset });
+  const lead = melody[beat % melody.length];
+  if (lead !== null) note(score.instrument, lead + (chapter === 1 ? 12 : 0), [2.8, 3.2, 7, 2.4, 5][chapter], boss ? 0.048 : 0.075);
+  if (chapter === 0) {
+    if (within === 0) { note('felt', chord, 3.2, 0.1); note('felt', chord + 12, 2.5, 0.025); }
+    if (within === 2 || within === 4) { note('felt', chord + 15, 1.8, 0.035); note('felt', chord + 19, 1.6, 0.025); air(0.1, 0.008, 1800); }
+    if (section === 3 && within === 5) note('glass', 31, 4, 0.018);
+  } else if (chapter === 1) {
+    if (within % 3 === 0) note('harp', chord + [0, 7, 15, 12][within / 3], 5, 0.065, 0.12);
+    if (within === 2 || within === 8) note('harp', chord + 31, 4, 0.018, 0.45);
+    if (within === 0) air(6, 0.01, 3900);
+    if (section >= 2 && within === 6) note('harp', chord + 19, 7, 0.035, 0.6);
+  } else if (chapter === 2) {
+    if (within === 0) { note('organ', chord - 12, 10, 0.085); note('choir', chord + 7, 9, 0.034); }
+    if (within === 4) { note('choir', chord + 15, 7, 0.036); air(3, 0.009, 550); }
+    if (within === 7 && bar % 2 === 1) note('glass', 36, 3, 0.022, 0.4);
+  } else if (chapter === 3) {
+    if ([0, 3, 5].includes(within)) note('glass', chord + [12, 19, 25][[0, 3, 5].indexOf(within)], 4, 0.035, 0.5);
+    if (within === 0) note('organ', chord, 7, 0.032);
+    if (within === 6 && section % 2) note('glass', chord + 37, 5, 0.017, 0.35);
+  } else {
+    if (within === 0) { note('cello', chord - 12, 11, 0.065); note('strings', chord + 7, 10, 0.022); }
+    if ([0, 1, 5, 6].includes(within)) drum(within % 5 === 0 ? 0.09 : 0.033);
+    if (within === 5 && section >= 2) note('choir', chord + 12, 10, 0.032);
+  }
+  if (boss) {
+    const accents = [[0, 3, 5], [0, 4, 7, 10], [0, 3, 6], [0, 2, 5], [0, 1, 5, 6]][chapter];
+    if (accents.includes(within)) drum(phase === 2 ? 0.18 : 0.135);
+    if (within % 2 === 0) note(chapter === 2 ? 'organ' : chapter === 1 ? 'harp' : 'cello', chord + score.bass[beat % score.bass.length], 1.8, 0.044);
+    if (phase === 2 && within % 2 === 1) {
+      air(0.35, 0.018, 1800 + chapter * 400);
+      if (lead !== null) note(chapter === 2 ? 'choir' : 'glass', lead + 12, 2.5, 0.018, 0.45);
+    }
+  }
+  return events;
+}
 
 export class AudioEngine {
   constructor(settings, onError) {
@@ -121,10 +175,14 @@ export class AudioEngine {
     } else if (name === 'glass') {
       this.bell(midi, time, volume, duration * 1.4);
       this.tone(midi + 28, time + 0.03, duration * 0.7, volume * 0.12, 'sine', this.score, 9);
+    } else if (name === 'organ') {
+      this.tone(midi, time, duration, volume, 'sine');
+      this.tone(midi + 12, time, duration * 0.95, volume * 0.36, 'sine');
+      this.tone(midi + 19, time, duration * 0.85, volume * 0.15, 'sine');
     } else {
       const c = this.context, filter = c.createBiquadFilter(), gain = c.createGain();
       const choir = name === 'choir';
-      filter.type = choir ? 'bandpass' : 'lowpass'; filter.frequency.value = choir ? 720 : this.boss ? 1600 : 900;
+      filter.type = choir ? 'bandpass' : 'lowpass'; filter.frequency.value = choir ? 720 : name === 'cello' ? 520 : this.boss ? 1600 : 900;
       filter.Q.value = choir ? 0.8 : 0.45;
       gain.gain.setValueAtTime(0, time);
       gain.gain.linearRampToValueAtTime(volume, time + Math.min(0.55, duration * 0.23));
@@ -134,7 +192,7 @@ export class AudioEngine {
       let remaining = 3;
       for (const [interval, detune] of [[0, -5], [0, 5], [12, 0]]) {
         const osc = c.createOscillator();
-        osc.type = choir ? 'sawtooth' : 'triangle';
+        osc.type = choir || name === 'cello' ? 'sawtooth' : 'triangle';
         osc.frequency.value = frequency(midi + interval);
         osc.detune.value = detune;
         osc.connect(filter); osc.start(time); osc.stop(time + duration + 0.05);
@@ -150,42 +208,17 @@ export class AudioEngine {
     const theme = SCORES[this.chapter], tempo = this.boss ? theme.tempo * (this.phase === 2 ? 1.72 : 1.45) : theme.tempo;
     const step = 60 / tempo / 2;
     while (this.nextBeat < c.currentTime + 0.3) {
-      const beat = this.beat, t = this.nextBeat;
-      const bar = Math.floor(beat / theme.meter), within = beat % theme.meter;
-      const chord = theme.chords[bar % theme.chords.length];
-      if (within === 0) {
-        this.instrument('strings', theme.root + chord, t, step * (theme.meter + 2), 0.07);
-        this.instrument(this.chapter === 2 ? 'choir' : 'strings', theme.root + chord + 7, t, step * (theme.meter + 2), 0.025);
-        if (this.chapter === 2) this.instrument('choir', theme.root + chord + 15, t, step * (theme.meter + 1), 0.04);
-      }
-      const note = theme.melody[beat % theme.melody.length];
-      if (note !== null) {
-        this.instrument(theme.instrument, theme.root + note + (this.chapter === 1 ? 12 : 0), t, step * (this.chapter === 2 ? 6 : this.chapter === 4 ? 4 : 3.5), this.boss ? 0.045 : 0.07);
-        if (this.phase === 2 && this.boss && beat % 2 === 0) this.instrument('glass', theme.root + note + 12, t + step * 0.5, step * 2, 0.02);
-      }
-      if (this.boss) {
-        const bass = theme.bass[beat % theme.bass.length] + (this.phase === 2 && within === theme.meter - 1 ? 1 : 0);
-        this.instrument('strings', theme.root + chord + bass, t, step * 1.1, 0.055);
-        if (within === 0 || within === Math.floor(theme.meter / 2)) this.drum(t, 0.18, this.score);
-        if (this.phase === 2 && beat % 2) this.noise(t, 0.13, 0.035, 2600, this.score);
-        if (within === theme.meter - 1) this.drum(t, 0.08, this.score);
-      } else if (this.chapter === 0) {
-        if (within === 0) this.instrument('felt', theme.root + chord, t, step * 3, 0.07);
-        if (within === 2 || within === 4) { this.instrument('felt', theme.root + chord + 15, t, step * 2, 0.025); this.noise(t, 0.04, 0.009, 1800, this.score); }
-      } else if (this.chapter === 1) {
-        if (beat % 3 === 0) this.instrument('harp', theme.root + chord + theme.bass[Math.floor(beat / 3) % 4] + 12, t + step * 0.25, step * 4, 0.035);
-        if (within === 0) this.noise(t, step * 4, 0.009, 3700, this.score);
-      } else if (this.chapter === 2) {
-        if (within === 4) this.tone(theme.root - 12, t, step * 6, 0.09, 'sine');
-        if (within === 7) this.tone(theme.root + 24, t, 0.5, 0.018, 'sine', this.score, -14);
-      } else if (this.chapter === 3) {
-        if (within === 0 || within === 3 || within === 5) this.instrument('glass', theme.root + theme.bass[within % 4] + 24, t + step * 0.5, step * 2, 0.025);
-        if (within === 0) this.noise(t, 0.35, 0.008, 5200, this.score);
-      } else {
-        if (within === 0 || within === 1 || within === 5 || within === 6) this.drum(t, within % 5 === 0 ? 0.085 : 0.038, this.score);
-        if (within === 0) this.instrument('choir', theme.root + chord + 12, t, step * 11, 0.022);
-      }
+      this.perform(scoreBeat(this.chapter, this.beat, this.boss, this.phase), this.nextBeat, step);
       this.beat++; this.nextBeat += step;
+    }
+  }
+
+  perform(events, time, step) {
+    for (const event of events) {
+      const start = time + event.offset * step, volume = event.volume * MIX_GAIN[this.chapter];
+      if (event.kind === 'note') this.instrument(event.voice, event.midi, start, event.length * step, volume);
+      else if (event.kind === 'drum') this.drum(start, volume, this.score);
+      else this.noise(start, event.length * step, volume, event.cutoff, this.score);
     }
   }
 
@@ -221,10 +254,13 @@ export class AudioEngine {
     } else if (name === 'foe-combo' || name === 'foe-volley') {
       this.noise(t, 0.17, 0.09, name === 'foe-combo' ? 1500 : 2800);
       tone(name === 'foe-combo' ? 51 : 74, 0, 0.2, 0.035);
-    } else if (name === 'boss-intro') {
+    } else if (['boss-intro', 'entrance-rise', 'entrance-reveal'].includes(name)) {
       const root = SCORES[this.chapter].root;
-      for (const [i, n] of [0, 7, 13, 12].entries()) tone(root + n, i * 0.19, 3.7, 0.065);
-      this.drum(t + 0.15, 0.18);
+      const stage = name === 'boss-intro' ? 0 : name === 'entrance-rise' ? 1 : 2;
+      const cue = ENTRANCES[this.chapter].cue;
+      for (const [i, n] of cue.entries()) tone(root + n + (stage === 2 ? 12 : 0), i * [0.23, 0.32, 0.42, 0.17, 0.28][this.chapter], stage === 2 ? 2.8 : 2, stage === 2 ? 0.065 : 0.035, this.chapter === 0 || this.chapter === 4 ? 'triangle' : 'sine');
+      if (stage === 1) this.noise(t, 1.6, 0.055, [900, 2200, 480, 4100, 650][this.chapter]);
+      if (stage === 2) { this.drum(t, 0.2); this.drum(t + (this.chapter === 4 ? 0.25 : 0.7), 0.07); }
     } else if (name === 'mutation' || name === 'mutation-reveal') {
       const root = SCORES[this.chapter].root;
       for (const [i, n] of (name === 'mutation' ? [12, 11, 7, 1, 0] : [0, 12, 19, 25, 31]).entries()) tone(root + n, i * 0.13, 2.8, 0.06, 'triangle');

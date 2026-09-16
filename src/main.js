@@ -1,4 +1,4 @@
-import { CHAPTERS, CONTROLS, ENDINGS, ROMAN, PROLOGUE, NPCS } from './content.js';
+import { CHAPTERS, CONTROLS, ENDINGS, ROMAN, PROLOGUE, ENTRANCES, NPCS } from './content.js';
 import { drawPortrait } from './actors.js';
 import { Game } from './game.js';
 import { Input } from './input.js';
@@ -126,23 +126,24 @@ function closeModal(restore = true) {
   }
 }
 
-function announce(index) {
+function announce(index, district = null) {
   clearTimeout(announcementTimer);
   const element = $('#chapter-announcement');
-  element.querySelector('span').textContent = `CHAPTER ${ROMAN[index]}`;
-  element.querySelector('h2').textContent = CHAPTERS[index].name;
-  element.querySelector('p').textContent = CHAPTERS[index].subtitle;
+  element.querySelector('span').textContent = district ? CHAPTERS[index].name.toUpperCase() : `CHAPTER ${ROMAN[index]}`;
+  element.querySelector('h2').textContent = district ? district.name : CHAPTERS[index].name;
+  element.querySelector('p').textContent = district ? district.detail : CHAPTERS[index].subtitle;
   element.hidden = false;
   element.style.animation = 'none';
   void element.offsetWidth;
   element.style.animation = '';
-  announcementTimer = setTimeout(() => { element.hidden = true; }, settings.reducedMotion ? 2500 : 5000);
+  announcementTimer = setTimeout(() => { element.hidden = true; }, settings.reducedMotion || district ? 2500 : 5000);
 }
 
 function gameEvent(event) {
   if (event.type === 'save') { saveProgress(); updatePresentation(); }
   else if (event.type === 'sound') audio.play(event.name);
   else if (event.type === 'hint') toast(event.text);
+  else if (event.type === 'district') announce(game.save.chapter, event.district);
   else if (event.type === 'cinematic') showCinematic();
   else if (event.type === 'cinematic-end') {
     input.clear(); updatePresentation();
@@ -186,6 +187,8 @@ function showCinematic() {
   clearTimeout(toastTimer); $('#toast').hidden = true;
   input.clear();
   cinematicOverlay.className = `cinematic-overlay ${shot.kind === 'prologue' ? 'prologue-scene' : 'boss-scene'} ${shot.kind === 'mutation' ? 'mutation-scene' : ''}`;
+  cinematicOverlay.classList.toggle('guardian-arrival', shot.kind === 'boss-intro');
+  cinematicOverlay.style.setProperty('--reveal', shot.kind === 'boss-intro' ? 0 : 1);
   if (shot.kind === 'prologue') {
     const plate = PROLOGUE[shot.index];
     $('#cinematic-label').textContent = plate.label;
@@ -253,7 +256,7 @@ function showChapters() {
 
 function showJournal() {
   const notes = game.save.notes, defeated = game.save.defeated;
-  showModal(`<p class="modal-eyebrow">WHAT THE CITY REMEMBERS</p><h2 id="modal-title">The archive.</h2><p class="prose small">You are Vesper’s last lamplighter. Your sister Mara rang the forbidden hundredth bell. These are the truths you have brought back from the dark.</p>${CHAPTERS.map((chapter, i) => `<article class="journal-note"><small>CHAPTER ${ROMAN[i]} · ${chapter.name.toUpperCase()}</small><h3>${notes.includes(i) ? chapter.note.title : 'An unwritten memory'}</h3><p>${notes.includes(i) ? chapter.note.text : 'Find the forgotten letter in this district.'}</p>${game.save.talked.includes(i) ? `<div class="modal-rule"></div><h3>${NPCS[i].name} · ${NPCS[i].role}</h3><p>${NPCS[i].intro.join(' ')}</p>${NPCS[i].choices.map(choice => `<h4>${choice.ask}</h4><p>${choice.answer.join(' ')}</p>`).join('')}` : ''}${defeated.includes(i) ? `<div class="modal-rule"></div><h3>${chapter.boss.name}</h3><p>${chapter.bossAfter}</p>` : ''}</article>`).join('')}${game.save.ending ? `<article class="journal-note"><h3>${ENDINGS[game.save.ending].title}</h3><p>${ENDINGS[game.save.ending].text}</p></article>` : ''}<div class="modal-actions"><button class="primary-button" data-modal-action="close">Close the archive</button></div>`, { kind: 'journal' });
+  showModal(`<p class="modal-eyebrow">WHAT THE CITY REMEMBERS</p><h2 id="modal-title">The archive.</h2><p class="prose small">You are Vesper’s last lamplighter. Your sister Mara rang the forbidden hundredth bell. These are the truths you have brought back from the dark.</p>${CHAPTERS.map((chapter, i) => `<article class="journal-note"><small>CHAPTER ${ROMAN[i]} · ${chapter.name.toUpperCase()}</small><h3>${notes.includes(i) ? chapter.note.title : 'An unwritten memory'}</h3><p>${notes.includes(i) ? chapter.note.text : 'Find the forgotten letter in this district.'}</p>${chapter.memories.map(m => game.save.memories.includes(m.id) ? `<div class="modal-rule"></div><h3>${m.title}</h3><p>${m.text}</p>` : '').join('')}${game.save.talked.includes(i) ? `<div class="modal-rule"></div><h3>${NPCS[i].name} · ${NPCS[i].role}</h3><p>${NPCS[i].intro.join(' ')}</p>${NPCS[i].choices.map(choice => `<h4>${choice.ask}</h4><p>${choice.answer.join(' ')}</p>`).join('')}` : ''}${defeated.includes(i) ? `<div class="modal-rule"></div><h3>${chapter.boss.name}</h3><p>${chapter.bossAfter}</p>` : ''}</article>`).join('')}${game.save.ending ? `<article class="journal-note"><h3>${ENDINGS[game.save.ending].title}</h3><p>${ENDINGS[game.save.ending].text}</p></article>` : ''}<div class="modal-actions"><button class="primary-button" data-modal-action="close">Close the archive</button></div>`, { kind: 'journal' });
 }
 
 function showSettings() {
@@ -276,7 +279,7 @@ function showRest() {
 }
 
 function showLore(note) {
-  showModal(`<p class="modal-eyebrow">A MEMORY RECOVERED</p><h2 id="modal-title">${note.title}</h2><p class="prose">${note.text}</p><p class="settings-warning">This memory is now in your archive.</p><div class="modal-actions"><button class="primary-button" data-modal-action="close">Remember <span>→</span></button></div>`, { kind: 'lore' });
+  showModal(`<p class="modal-eyebrow">A MEMORY RECOVERED</p><h2 id="modal-title">${note.title}</h2><p class="prose">${note.text}</p><p class="settings-warning">This memory is now in your archive.${note.reward ? ` You recovered ${note.reward} echoes.` : ''}</p><div class="modal-actions"><button class="primary-button" data-modal-action="close">Remember <span>→</span></button></div>`, { kind: 'lore' });
 }
 
 function showDeath() {
@@ -533,7 +536,15 @@ function frameLoop(now) {
   }
   if (stepped) input.endFrame();
   renderer.render(game, settings.reducedMotion && game.mode === 'menu' ? 8 : visualTime);
-  if (game.cinematic) $('#cinematic-progress-fill').style.width = `${Math.min(100, game.cinematic.elapsed / game.cinematic.duration * 100)}%`;
+  if (game.cinematic) {
+    const progress = Math.min(1, game.cinematic.elapsed / game.cinematic.duration);
+    $('#cinematic-progress-fill').style.width = `${progress * 100}%`;
+    if (game.cinematic.kind === 'boss-intro') {
+      const entrance = ENTRANCES[game.save.chapter];
+      cinematicOverlay.style.setProperty('--reveal', Math.max(0, Math.min(1, (progress - 0.56) / 0.1)));
+      $('#cinematic-label').textContent = progress < 0.24 ? entrance.omen : progress < 0.56 ? entrance.arrival : `GUARDIAN ${ROMAN[game.save.chapter]} / ${entrance.landmark.toUpperCase()}`;
+    }
+  }
   if (game.dialogue && hudFrame % 6 === 0) {
     const portrait = dialogueOverlay.querySelector('canvas');
     if (portrait) drawPortrait(portrait.getContext('2d'), game.dialogue.npc, settings.reducedMotion ? 8 : visualTime);

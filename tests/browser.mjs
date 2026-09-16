@@ -11,7 +11,7 @@ const errors = [];
 const context = await browser.newContext({ viewport: { width: 1440, height: 1060 }, deviceScaleFactor: 1 });
 const page = await context.newPage();
 const watch = page => {
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => errors.push(error.stack || error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   page.on('response', response => { if (response.status() >= 400) errors.push(`HTTP ${response.status()}: ${response.url()}`); });
 };
@@ -63,6 +63,7 @@ try {
   const dev = await page.evaluate(() => !!window.__VESPER__);
   if (dev) {
     assert.equal(await page.evaluate(() => window.__VESPER__.audio.context.state), 'running');
+    await page.evaluate(() => { window.__VESPER__.game.mode = 'paused'; });
     const bestiary = await page.evaluate(async () => {
       const { drawEnemy, drawBoss } = await import('/src/actors.js');
       const { ATTACKS } = await import('/src/attacks.js');
@@ -99,9 +100,23 @@ try {
         heading(phase === 1 ? e.name : e.drama.mutation, chapter * 340 + 170, (phase - 1) * 460 + 405, 18);
         heading(phase === 1 ? 'FALLEN GUARDIAN' : 'SECOND AWAKENING', chapter * 340 + 170, (phase - 1) * 460 + 432, 11);
       }
-      const bosses = canvas.toDataURL(), impacts = {};
+      const bosses = canvas.toDataURL(), impacts = {}, scenes = {};
       canvas.width = 960; canvas.height = 540;
       const r = new renderer.constructor(canvas, { ...live.settings, shake: false });
+      for (let chapter = 0; chapter < 5; chapter++) {
+        const g = make(chapter); g.mode = 'playing';
+        for (const [index, memory] of g.level.memories.entries()) {
+          g.player.x = memory.x - 90; g.player.y = memory.y - g.player.h; g.camera = memory.x - 480;
+          r.render(g, 6);
+          scenes[`extended-route-${chapter + 1}-${index + 1}`] = canvas.toDataURL();
+        }
+        g.boss.active = true; g.beginBossCinematic('boss-intro');
+        for (const [index, progress] of [0.14, 0.4, 0.7].entries()) {
+          g.cinematic.elapsed = g.cinematic.duration * progress;
+          r.render(g, g.cinematic.elapsed);
+          scenes[`entrance-stage-${chapter + 1}-${index + 1}`] = canvas.toDataURL();
+        }
+      }
       let rendered = 0;
       for (const [pattern, a] of Object.entries(ATTACKS)) {
         let chapter = ENEMY_CAST.findIndex(cast => Object.values(cast).some(s => s.patterns.includes(pattern)));
@@ -119,10 +134,10 @@ try {
           if (!ordinary && frame === Math.floor((a.windup + 0.2) * 60)) { r.render(g, g.time); impacts[pattern] = canvas.toDataURL(); }
         }
       }
-      return { enemies, bosses, impacts, rendered };
+      return { enemies, bosses, impacts, scenes, rendered };
     });
     assert.ok(bestiary.rendered > 250);
-    for (const [name, data] of Object.entries({ 'enemy-bestiary': bestiary.enemies, 'guardian-bestiary': bestiary.bosses, ...bestiary.impacts })) {
+    for (const [name, data] of Object.entries({ 'enemy-bestiary': bestiary.enemies, 'guardian-bestiary': bestiary.bosses, ...bestiary.impacts, ...bestiary.scenes })) {
       await writeFile(path.join(output, `${name}.png`), Buffer.from(data.split(',')[1], 'base64'));
     }
     const visualMetrics = await page.evaluate(() => {
@@ -146,7 +161,7 @@ try {
     const instrumentMetrics = await page.evaluate(async () => {
       const Audio = window.__VESPER__.audio.constructor;
       const metrics = [];
-      for (const instrument of ['felt', 'harp', 'choir', 'glass', 'strings']) {
+      for (const instrument of ['felt', 'harp', 'choir', 'glass', 'strings', 'organ', 'cello']) {
         const engine = new Audio({ sound: true, music: 1, effects: 1 }, message => { throw new Error(message); });
         const c = new OfflineAudioContext(1, 44100 * 2, 44100);
         engine.context = c; engine.score = c.createGain(); engine.score.connect(c.destination);
@@ -162,7 +177,43 @@ try {
       return metrics;
     });
     assert.ok(instrumentMetrics.every(m => m.rms > 0.005 && m.peak < 1), `Silent or clipped instruments: ${JSON.stringify(instrumentMetrics)}`);
-    assert.equal(new Set(instrumentMetrics.map(m => `${m.rms.toFixed(4)}:${m.crossings}`)).size, 5);
+    assert.equal(new Set(instrumentMetrics.map(m => `${m.rms.toFixed(4)}:${m.crossings}`)).size, 7);
+    const scoreMetrics = await page.evaluate(async () => {
+      const { SCORES, scoreBeat } = await import('/src/audio.js');
+      const metrics = [], Audio = window.__VESPER__.audio.constructor;
+      for (let chapter = 0; chapter < 5; chapter++) for (let phase = 0; phase < 3; phase++) {
+        const score = SCORES[chapter], step = 30 / (score.tempo * (phase === 2 ? 1.72 : phase === 1 ? 1.45 : 1));
+        const count = score.meter * 8, c = new OfflineAudioContext(1, Math.ceil(22050 * ((count + 12) * step + 0.1)), 22050);
+        const engine = new Audio({ sound: true, music: 1, effects: 1 }, message => { throw new Error(message); });
+        engine.context = c; engine.boss = phase > 0; engine.phase = phase || 1; engine.chapter = chapter;
+        engine.score = c.createGain(); engine.score.connect(c.destination);
+        engine.noiseBuffer = c.createBuffer(1, 22050, 22050);
+        const noise = engine.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noise.length; i++) noise[i] = Math.sin(i * 31.37) * 0.5;
+        for (let beat = 0; beat < count; beat++) engine.perform(scoreBeat(chapter, beat, phase > 0, phase || 1), 0.05 + beat * step, step);
+        const data = (await c.startRendering()).getChannelData(0);
+        let squares = 0, peak = 0, crossings = 0;
+        for (let i = 1; i < data.length; i++) { squares += data[i] ** 2; peak = Math.max(peak, Math.abs(data[i])); if (data[i] >= 0 && data[i - 1] < 0) crossings++; }
+        metrics.push({ chapter, phase, rms: Math.sqrt(squares / data.length), peak, crossings });
+      }
+      return metrics;
+    });
+    assert.ok(scoreMetrics.every(m => m.rms > 0.008 && m.peak < 0.95), `Silent or clipped scores: ${JSON.stringify(scoreMetrics)}`);
+    assert.equal(new Set(scoreMetrics.map(m => `${m.rms.toFixed(4)}:${m.crossings}`)).size, 15);
+    const explorationLoudness = scoreMetrics.filter(m => m.phase === 0).map(m => m.rms);
+    assert.ok(Math.max(...explorationLoudness) / Math.min(...explorationLoudness) < 2.5, 'District music levels should remain balanced');
+    await writeFile(path.join(output, 'score-metrics.json'), JSON.stringify(scoreMetrics, null, 2));
+    await page.evaluate(() => {
+      const g = window.__VESPER__.game, memory = g.level.memories[0];
+      g.mode = 'playing'; g.player.x = memory.x - 12; g.player.y = memory.y - 48; g.player.grounded = true; g.camera = memory.x - 480;
+    });
+    await page.keyboard.press('e');
+    await expect(page.getByRole('heading', { name: 'The last lamp on the roof' })).toBeVisible();
+    await page.getByRole('button', { name: 'Remember', exact: false }).click();
+    await page.locator('.masthead [data-open="journal"]').click();
+    await expect(page.getByRole('heading', { name: 'The last lamp on the roof' })).toBeVisible();
+    await page.getByRole('button', { name: 'Close the archive' }).click();
+    await page.evaluate(() => { const g = window.__VESPER__.game; g.loadChapter(0, 0); g.mode = 'playing'; });
     const startX = await page.evaluate(() => window.__VESPER__.game.player.x);
     await page.keyboard.down('d');
     await page.waitForTimeout(400);
@@ -298,7 +349,12 @@ try {
         g.player.x = g.level.arena - 30; g.player.y = 404; g.player.vx = 0; g.player.vy = 0; g.player.invulnerable = 100;
       });
       await expect(page.locator('#cinematic-overlay')).toHaveClass(/boss-scene/);
-      await page.waitForTimeout(1100);
+      await expect(page.locator('#cinematic-overlay')).toBeVisible();
+      await page.waitForFunction(() => {
+        const shot = window.__VESPER__.game.cinematic;
+        return shot?.kind === 'boss-intro' && shot.elapsed / shot.duration >= 0.69;
+      });
+      await expect(page.locator('#cinematic-title')).toHaveCSS('opacity', '1');
       await page.screenshot({ path: path.join(output, `guardian-intro-${chapter + 1}.png`), fullPage: true });
       await page.locator('#cinematic-next').click();
       await expect(page.locator('#boss-hud')).toBeVisible();
@@ -435,6 +491,24 @@ try {
   await expect(phone.locator('#touch-controls')).toBeVisible();
   await phone.locator('#pause-button').tap();
   await expect(phone.getByRole('heading', { name: 'A moment of silence.' })).toBeVisible();
+  if (dev) {
+    await phone.setViewportSize({ width: 390, height: 844 });
+    await phone.getByRole('button', { name: 'Return to the hunt' }).tap();
+    await expect(phone.locator('#modal-layer')).toBeHidden();
+    for (let chapter = 0; chapter < 5; chapter++) {
+      await phone.evaluate(index => {
+        const g = window.__VESPER__.game;
+        g.save.unlocked = 4; g.loadChapter(index, 3); g.mode = 'playing'; g.boss.active = true;
+        g.beginBossCinematic('boss-intro'); g.cinematic.elapsed = g.cinematic.duration * 0.72; g.cinematic.suspended = true;
+      }, chapter);
+      await expect(phone.locator('#cinematic-overlay')).toBeVisible();
+      await expect(phone.locator('#cinematic-title')).toHaveCSS('opacity', '1');
+      assert.ok(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      await phone.screenshot({ path: path.join(output, `guardian-mobile-${chapter + 1}.png`), fullPage: true });
+      await phone.locator('#cinematic-skip').tap();
+      await expect(phone.locator('#boss-hud')).toBeVisible();
+    }
+  }
   await mobile.close();
 
   await page.bringToFront();

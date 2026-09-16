@@ -3,7 +3,8 @@ import { random, rect, polygon, line, glow, surface, shape, oval, limb } from '.
 import { drawHunter, drawEnemy, drawBoss, drawNPC } from './actors.js';
 import { ATTACKS, attackColor } from './attacks.js';
 import { drawHazard, drawProjectile } from './effects.js';
-import { livingWorld } from './world.js';
+import { livingWorld, districtLandmark } from './world.js';
+import { entrancePose, drawEntrance } from './entrance.js';
 
 function gothicWindow(c, x, y, w, h, lit, palette, detailed = true) {
   polygon(c, [[x, y + h], [x, y + w / 2], [x + w / 2, y], [x + w, y + w / 2], [x + w, y + h]], '#0c1c20');
@@ -356,11 +357,11 @@ export class Renderer {
 
   decorations(game) {
     const c = this.ctx, level = game.level, p = level.palette, camera = game.camera;
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < Math.ceil(level.arena / 233); i++) {
       const wx = 70 + i * 233, x = wx - camera, y = game.floorAt(wx);
       if (x < -150 || x > WIDTH + 150 || wx > level.arena - 90) continue;
       if (i % 2 === 0) this.railing(x, y, 102);
-      if (i % 3 === 0 && Math.abs(wx - level.checkpoint) > 90 && wx > 230) this.lamp(x, y, game.time + i, p);
+      if (i % 3 === 0 && level.lamps.every(lamp => Math.abs(wx - lamp) > 90) && wx > 230) this.lamp(x, y, game.time + i, p);
       if (i % 3 === 1) {
         rect(c, x, y - 20, 24, 20, '#39433a'); rect(c, x - 2, y - 22, 28, 4, '#76765d');
         line(c, x + 2, y - 18, x + 21, y - 2, '#73745b', 2);
@@ -368,7 +369,13 @@ export class Renderer {
         rect(c, x + 29, y - 11, 14, 11, '#4d4b3d'); rect(c, x + 28, y - 13, 16, 3, '#8d8160');
       }
     }
-    for (const x of [155, level.checkpoint]) this.lamp(x - camera, game.floorAt(x), game.time, p, true);
+    for (const x of level.lamps) this.lamp(x - camera, game.floorAt(x), game.time, p, true);
+    for (const memory of level.memories) if (!game.save.memories.includes(memory.id) && Math.abs(memory.x - camera - WIDTH / 2) < WIDTH) {
+      const x = memory.x - camera, y = memory.y - 20;
+      glow(c, x, y, 34, p.light, 0.3);
+      shape(c, [[x - 8, y - 4], [x, y - 8], [x + 8, y - 4], [x + 7, y + 7], [x, y + 3], [x - 7, y + 7]], '#dac9a2', '#7b7966');
+      line(c, x, y - 6, x, y + 2, '#82745c');
+    }
     if (!game.save.notes.includes(game.save.chapter)) {
       const x = level.noteX - camera, y = game.floorAt(level.noteX) - 16;
       rect(c, x - 6, y + Math.sin(game.time * 2) * 2, 12, 9, '#c9bc98');
@@ -447,9 +454,9 @@ export class Renderer {
     c.save();
     if (game.cinematic && !menu) {
       const shot = game.cinematic, progress = Math.min(1, shot.elapsed / shot.duration);
-      const zoom = this.settings.reducedMotion ? 1.35 : shot.kind === 'mutation' ? 1.35 + Math.sin(progress * Math.PI) * 0.22 : 1.1 + progress * 0.38;
+      const zoom = this.settings.reducedMotion ? 1.4 : shot.kind === 'mutation' ? 1.35 + Math.sin(progress * Math.PI) * 0.22 : 1.22 + Math.sin(Math.min(1, progress / 0.7) * Math.PI * 0.65) * 0.45;
       const focusX = game.boss.x + game.boss.w / 2 - game.camera, focusY = 452 - game.boss.h * 0.6;
-      c.translate(WIDTH * 0.53, HEIGHT * 0.51); c.scale(zoom, zoom); c.translate(-focusX, -focusY);
+      c.translate(WIDTH * 0.53, HEIGHT * (shot.kind === 'boss-intro' ? 0.38 : 0.43)); c.scale(zoom, zoom); c.translate(-focusX, -focusY);
     } else if (game.dialogue) {
       c.translate(WIDTH * 0.5, HEIGHT * 0.4); c.scale(1.3, 1.3); c.translate(-WIDTH * 0.5, -(game.npc.y - 43));
     }
@@ -464,6 +471,10 @@ export class Renderer {
       this.atmosphere(0, time, 0);
     } else {
       this.background(game.save.chapter, game.camera, time);
+      for (const district of game.level.districts) {
+        const x = district.x + 600 - game.camera;
+        if (x > -220 && x < WIDTH + 220) districtLandmark(c, { ...district, x }, 452, game.save.chapter, time, this.settings);
+      }
       for (const floor of game.platforms) this.platform({ ...floor, x: Math.round(floor.x - game.camera) }, game.level.palette, game.save.chapter);
       this.decorations(game);
       c.save(); c.translate(-Math.round(game.camera), 0);
@@ -474,7 +485,16 @@ export class Renderer {
       }
       for (const z of game.zones) drawHazard(c, z, time);
       for (const e of game.enemies) if (Math.abs(e.x - game.player.x) < WIDTH) this.drawEnemy(e, time);
-      this.drawBoss(game.boss, time);
+      if (game.cinematic?.kind === 'boss-intro') {
+        const progress = game.cinematic.elapsed / game.cinematic.duration;
+        const pose = entrancePose(game.boss.kind, progress, this.settings.reducedMotion);
+        drawEntrance(c, game.boss, progress, false, this.settings);
+        c.save(); c.beginPath(); c.rect(game.camera - WIDTH, -540, WIDTH * 3, 992); c.clip();
+        c.globalAlpha *= pose.alpha;
+        drawBoss(c, { ...game.boss, y: game.boss.y + pose.offsetY }, this.settings.reducedMotion ? 0 : game.cinematic.elapsed);
+        c.restore();
+        drawEntrance(c, game.boss, progress, true, this.settings);
+      } else if (game.boss.active) this.drawBoss(game.boss, time);
       for (const a of game.afterimages) this.drawHunter({ ...game.player, ...a, dash: 0.1 }, time, a.life * 1.25);
       for (const ring of game.rings) {
         c.save(); c.globalAlpha = Math.min(0.55, ring.life);

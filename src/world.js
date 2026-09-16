@@ -3,6 +3,74 @@ import { rect, line, shape, oval, glow, limb } from './art.js';
 const wrap = (n, width) => (n % width + width) % width;
 const TAU = Math.PI * 2;
 
+export function districtLandmark(c, district, floor, chapter, time, settings) {
+  const { x, kind } = district, t = settings.reducedMotion ? 0 : time;
+  const colors = [['#667a70', '#c7ac77'], ['#627859', '#bccc97'], ['#487581', '#a9d1c7'], ['#6e658a', '#ccb7d8'], ['#895e71', '#e5b39d']][chapter];
+  c.save(); c.translate(x, floor); c.globalAlpha = 0.78;
+  if (kind === 'clock' || kind === 'belfry' || kind === 'furnace') {
+    shape(c, [[-95, 0], [-88, -216], [-55, -236], [0, -293], [55, -236], [88, -216], [95, 0]], '#20343b', colors[0], 3);
+    for (const side of [-1, 1]) { limb(c, [side * 76, 0], [side * 70, -213], 9, 5, '#344849', colors[0]); line(c, side * 84, -217, 0, -282, colors[1], 2); }
+    if (kind === 'clock') {
+      oval(c, 0, -199, 47, 47, '#192e34', colors[1]);
+      for (let i = 0; i < 12; i++) { const a = i * TAU / 12; line(c, Math.cos(a) * 37, -199 + Math.sin(a) * 37, Math.cos(a) * 42, -199 + Math.sin(a) * 42, colors[1], 2); }
+      line(c, 0, -199, Math.sin(t * 0.04) * 34, -199 - Math.cos(t * 0.04) * 34, colors[1], 2);
+      line(c, 0, -199, -22, -216, colors[1], 3);
+    } else if (kind === 'belfry') {
+      line(c, 0, -270, 0, -225, colors[1], 3);
+      shape(c, [[-40, -135], [-30, -196], [-16, -220], [16, -220], [30, -196], [40, -135]], colors[0], colors[1], 2);
+      oval(c, 0, -135, 42, 11, '#192d35', colors[1]); line(c, 0, -172, Math.sin(t) * 9, -124, colors[1], 4);
+    } else {
+      for (let i = 0; i < 3; i++) {
+        const bx = -51 + i * 51;
+        shape(c, [[bx - 16, -27], [bx - 16, -145], [bx, -174], [bx + 16, -145], [bx + 16, -27]], '#be8859', colors[1]);
+        for (let k = 0; k < 5; k++) line(c, bx - 14, -124 + k * 20, bx + 14, -124 + k * 20, '#354039', 4);
+        glow(c, bx, -80, 60, '#dbac69', 0.19 + Math.sin(t * 3 + i) * 0.04);
+      }
+    }
+  } else if (kind === 'glasshouse' || kind === 'cradle') {
+    for (const side of [-1, 1]) {
+      c.strokeStyle = colors[0]; c.lineWidth = 15; c.beginPath(); c.moveTo(side * 112, 0); c.bezierCurveTo(side * 90, -65, side * 170, -164, 0, -260); c.stroke();
+      c.strokeStyle = colors[1]; c.lineWidth = 2; c.stroke();
+    }
+    for (let i = 0; i < 7; i++) {
+      const x = -90 + i * 30;
+      if (kind === 'glasshouse') line(c, x, -15, x * 0.4, -205 - (3 - Math.abs(3 - i)) * 15, colors[0], 2);
+      else { line(c, x, -182 - Math.sin(i) * 35, x * 0.6, -104, colors[0], 3); oval(c, x * 0.6, -107, 14, 24, '#3e5946', colors[1]); }
+    }
+    if (kind === 'glasshouse') for (let i = 0; i < 4; i++) line(c, -100, -48 - i * 40, 100, -48 - i * 40, colors[0], 2);
+    else { oval(c, 0, -51, 64, 18, '#344537', colors[1]); line(c, -52, -55, -67, -21, colors[0], 4); line(c, 52, -55, 67, -21, colors[0], 4); }
+  } else if (kind === 'ferry') {
+    shape(c, [[-140, -17], [-111, -48], [-88, -27], [82, -27], [123, -58], [140, -22], [92, -1], [-91, -1]], '#314e54', colors[1], 2);
+    line(c, -50, -9, 65, -172, colors[0], 5);
+    for (const side of [-1, 1]) line(c, side * 91, -4, side * 103, -106, colors[0], 4);
+    for (let i = 0; i < 3; i++) ring(c, 0, 10 + i * 6, 143 + Math.sin(t + i) * 9, 0.09, 0, colors[0]);
+  } else if (kind === 'orrery' || kind === 'telescope') {
+    limb(c, [-88, 0], [0, -129], 11, 6, '#36374d', colors[0]); limb(c, [88, 0], [0, -129], 11, 6, '#36374d', colors[0]);
+    if (kind === 'orrery') {
+      for (let i = 0; i < 4; i++) ring(c, 0, -166, 61 + i * 15, 0.4 + i * 0.13, t * 0.05 + i * 0.7, colors[i % 2], 2);
+      oval(c, 0, -166, 22, 22, '#332c49', colors[1]);
+    } else {
+      limb(c, [-70, -122], [104, -237], 23, 34, '#444357', colors[1]);
+      limb(c, [-45, -143], [80, -225], 18, 27, '#76738a', colors[1]);
+      oval(c, 107, -239, 15, 34, '#202b3d', colors[1]);
+      glow(c, 107, -239, 53, colors[1], 0.17);
+    }
+  } else {
+    for (const side of [-1, 1]) {
+      c.strokeStyle = colors[0]; c.lineWidth = 18; c.beginPath(); c.moveTo(side * 112, 0); c.bezierCurveTo(side * 18, -74, side * 170, -191, side * 30, -271); c.stroke();
+      c.strokeStyle = colors[1]; c.lineWidth = 2; c.stroke();
+    }
+    if (kind === 'memory') {
+      shape(c, [[-53, -30], [-53, -138], [0, -190], [53, -138], [53, -30]], '#543843', colors[1], 2);
+      for (const x of [-24, 24]) { shape(c, [[x - 10, -81], [x - 10, -128], [x, -140], [x + 10, -128], [x + 10, -81]], '#d9b195'); glow(c, x, -107, 40, colors[1], 0.17); }
+    } else {
+      for (let i = 0; i < 6; i++) { const y = -40 - i * 33; ring(c, 0, y, 38 + Math.sin(t * 2.5 + i) * 4, 0.4, i * 0.17, colors[0], 5); }
+      glow(c, 0, -135, 90, colors[1], 0.1 + Math.sin(t * 2.5) * 0.035);
+    }
+  }
+  c.restore();
+}
+
 function ring(c, x, y, radius, squash, angle, color, width = 1) {
   c.save(); c.translate(x, y); c.rotate(angle);
   c.strokeStyle = color; c.lineWidth = width; c.beginPath();
