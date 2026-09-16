@@ -1,6 +1,8 @@
 import { CHAPTERS, WIDTH, HEIGHT, PROLOGUE, NPCS } from './content.js';
 import { random, rect, polygon, line, glow, surface, shape, oval, limb } from './art.js';
 import { drawHunter, drawEnemy, drawBoss, drawNPC } from './actors.js';
+import { ATTACKS, attackColor } from './attacks.js';
+import { drawHazard, drawProjectile } from './effects.js';
 import { livingWorld } from './world.js';
 
 function gothicWindow(c, x, y, w, h, lit, palette, detailed = true) {
@@ -333,12 +335,22 @@ export class Renderer {
       }
     } else if (e.state === 'windup') {
       const progress = 1 - e.timer / e.windupDuration;
-      const color = ['leap', 'meteor', 'nova', 'roots', 'tidal', 'eclipse', 'rapture'].includes(e.pattern) ? '#b19bcc' : '#dfaa73';
+      const color = attackColor(e.pattern), attack = ATTACKS[e.pattern];
       const cx = e.x + e.w / 2;
       glow(c, cx, e.y + e.h / 2, 55, color, progress * 0.4);
       polygon(c, [[cx, e.y - 26], [cx + 5, e.y - 19], [cx, e.y - 12], [cx - 5, e.y - 19]], color);
       rect(c, cx - 20, e.y - 7, 40, 2, '#223334');
       rect(c, cx - 20, e.y - 7, 40 * progress, 2, color);
+      if (attack) {
+        c.textAlign = 'center'; c.font = e.isBoss ? '10px Georgia' : '8px Georgia'; c.fillStyle = '#ecdfbc';
+        c.fillText(e.isBoss ? attack.name : e.species.name, cx, e.y - 38);
+        if (attack.beats?.length > 1) for (let i = 0; i < attack.beats.length; i++) rect(c, cx - (attack.beats.length - 1) * 5 + i * 10 - 2, e.y - 33, 4, 2, color);
+      }
+      if (attack?.teleport && !e.teleported) {
+        const x = e.teleportX + e.w / 2, y = e.y + e.h;
+        c.save(); c.globalAlpha = 0.55;
+        c.strokeStyle = color; c.lineWidth = 2; c.beginPath(); c.ellipse(x, y - e.h / 2, 19, e.h * 0.65, 0, 0, Math.PI * 2); c.stroke(); c.restore();
+      }
     }
   }
 
@@ -460,16 +472,7 @@ export class Renderer {
         glow(c, stain.x + 12, stain.y, 50, '#a2d0b3', 0.35);
         polygon(c, [[stain.x + 12, stain.y - 12], [stain.x + 18, stain.y], [stain.x + 12, stain.y + 12], [stain.x + 6, stain.y]], '#a8cdb5');
       }
-      for (const z of game.zones) {
-        c.save(); c.globalAlpha = z.fired ? z.life * 2 : 0.4;
-        rect(c, z.x - z.radius, z.y - 3, z.radius * 2, 3, '#dfb4e8');
-        if (z.fired && z.kind === 'roots') {
-          for (let i = 0; i < 4; i++) shape(c, [[z.x - 27 + i * 15, z.y], [z.x - 34 + i * 16, z.y - 83 - i % 2 * 25], [z.x - 16 + i * 15, z.y]], '#9faf7e', '#d7d2a7');
-        } else if (z.fired) {
-          polygon(c, [[z.x - 36, z.y], [z.x - 7, z.y - 170], [z.x + 9, z.y - 150], [z.x + 35, z.y]], '#d9b9e5');
-        } else { line(c, z.x, z.y - 210, z.x, z.y, '#a991b8'); glow(c, z.x, z.y, z.radius, '#b79ac7', 0.4); }
-        c.restore();
-      }
+      for (const z of game.zones) drawHazard(c, z, time);
       for (const e of game.enemies) if (Math.abs(e.x - game.player.x) < WIDTH) this.drawEnemy(e, time);
       this.drawBoss(game.boss, time);
       for (const a of game.afterimages) this.drawHunter({ ...game.player, ...a, dash: 0.1 }, time, a.life * 1.25);
@@ -483,12 +486,7 @@ export class Renderer {
           c.save(); c.globalAlpha = game.deathTimer / 1.5; this.drawHunter(game.player, time); c.restore();
         } else this.drawHunter(game.player, time);
       }
-      for (const bolt of game.projectiles) {
-        const color = bolt.color || '#bbccbf';
-        glow(c, bolt.x, bolt.y, 24, color, 0.45);
-        if (bolt.wave) polygon(c, [[bolt.x, bolt.y + 18], [bolt.x + 10, bolt.y - 17], [bolt.x + 18, bolt.y], [bolt.x + 27, bolt.y + 18]], color);
-        else { line(c, bolt.x + 4, bolt.y + 4, bolt.x - bolt.vx * 0.07, bolt.y - bolt.vy * 0.07, color, 2); shape(c, [[bolt.x + 5, bolt.y - 3], [bolt.x + 12, bolt.y + 5], [bolt.x + 5, bolt.y + 12], [bolt.x - 2, bolt.y + 5]], color); rect(c, bolt.x + 3, bolt.y + 3, 4, 4, '#f5eed2'); }
-      }
+      for (const bolt of game.projectiles) drawProjectile(c, bolt, time);
       for (const p of game.particles) { c.save(); c.globalAlpha = Math.min(1, p.life * 2); rect(c, p.x, p.y, p.size, p.size, p.color); c.restore(); }
       c.textAlign = 'center'; c.font = '12px Georgia';
       for (const f of game.floaters) { c.save(); c.globalAlpha = Math.min(1, f.life * 2); c.fillStyle = '#0e1c20'; c.fillText(f.text, f.x + 1, f.y + 1); c.fillStyle = f.color; c.fillText(f.text, f.x, f.y); c.restore(); }

@@ -1,6 +1,6 @@
 import { chromium, expect } from '@playwright/test';
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const baseURL = process.env.VESPER_URL || 'http://127.0.0.1:4173';
@@ -63,6 +63,68 @@ try {
   const dev = await page.evaluate(() => !!window.__VESPER__);
   if (dev) {
     assert.equal(await page.evaluate(() => window.__VESPER__.audio.context.state), 'running');
+    const bestiary = await page.evaluate(async () => {
+      const { drawEnemy, drawBoss } = await import('/src/actors.js');
+      const { ATTACKS } = await import('/src/attacks.js');
+      const { freshSave } = await import('/src/storage.js');
+      const { CHAPTERS, ENEMY_CAST, BOSS_DRAMA } = await import('/src/content.js');
+      const { game: live, renderer } = window.__VESPER__;
+      const canvas = document.createElement('canvas'), c = canvas.getContext('2d');
+      canvas.width = 1500; canvas.height = 870;
+      c.fillStyle = '#0d1a23'; c.fillRect(0, 0, canvas.width, canvas.height);
+      const make = chapter => new live.constructor({ ...freshSave(), chapter, unlocked: 4, prologueSeen: true }, { ...live.settings });
+      const heading = (text, x, y, size = 17) => { c.fillStyle = '#dac598'; c.font = `${size}px Georgia`; c.textAlign = 'center'; c.fillText(text, x, y); };
+      for (let chapter = 0; chapter < 5; chapter++) {
+        const g = make(chapter);
+        heading(CHAPTERS[chapter].name, chapter * 300 + 150, 25, 16);
+        for (const [row, kind] of ['husk', 'acolyte', 'brute'].entries()) {
+          const enemy = { ...g.enemies.find(e => e.kind === kind), x: 0, y: 0, facing: 1 };
+          enemy.pattern = enemy.species.patterns[0]; enemy.state = 'windup'; enemy.windupDuration = ATTACKS[enemy.pattern].windup; enemy.timer = enemy.windupDuration * 0.45;
+          c.save(); c.translate(chapter * 300 + 140, row * 275 + 220); c.scale(2.3, 2.3); c.translate(-enemy.w / 2, -enemy.h);
+          drawEnemy(c, enemy, 6); c.restore();
+          heading(enemy.species.name, chapter * 300 + 150, row * 275 + 246);
+          heading(ATTACKS[enemy.pattern].name, chapter * 300 + 150, row * 275 + 266, 12);
+        }
+      }
+      const enemies = canvas.toDataURL();
+      canvas.width = 1700; canvas.height = 940;
+      c.fillStyle = '#101b24'; c.fillRect(0, 0, canvas.width, canvas.height);
+      for (let chapter = 0; chapter < 5; chapter++) for (let phase = 1; phase <= 2; phase++) {
+        const g = make(chapter), e = g.boss;
+        if (phase === 2) g.mutateBoss();
+        e.facing = 1; e.pattern = phase === 1 ? e.drama.opening[0] : e.drama.patterns[0];
+        e.state = 'windup'; e.windupDuration = ATTACKS[e.pattern].windup; e.timer = e.windupDuration * 0.45;
+        c.save(); c.translate(chapter * 340 + 170, (phase - 1) * 460 + 365); c.scale(1.35, 1.35); c.translate(-e.x - e.w / 2, -e.y - e.h);
+        drawBoss(c, e, 6); c.restore();
+        heading(phase === 1 ? e.name : e.drama.mutation, chapter * 340 + 170, (phase - 1) * 460 + 405, 18);
+        heading(phase === 1 ? 'FALLEN GUARDIAN' : 'SECOND AWAKENING', chapter * 340 + 170, (phase - 1) * 460 + 432, 11);
+      }
+      const bosses = canvas.toDataURL(), impacts = {};
+      canvas.width = 960; canvas.height = 540;
+      const r = new renderer.constructor(canvas, { ...live.settings, shake: false });
+      let rendered = 0;
+      for (const [pattern, a] of Object.entries(ATTACKS)) {
+        let chapter = ENEMY_CAST.findIndex(cast => Object.values(cast).some(s => s.patterns.includes(pattern)));
+        const ordinary = chapter >= 0;
+        if (!ordinary) chapter = BOSS_DRAMA.findIndex(b => [...b.opening, ...b.patterns].includes(pattern));
+        const g = make(chapter), e = ordinary ? g.enemies.find(e => e.species.patterns.includes(pattern)) : g.boss;
+        g.mode = 'playing';
+        if (!ordinary) { e.active = true; if (!e.drama.opening.includes(pattern)) g.mutateBoss(); }
+        g.player.x = e.x - 130; g.player.invulnerable = 100; g.camera = Math.max(0, e.x - 550);
+        e.facing = -1; e.pattern = pattern; e.state = 'windup'; e.timer = a.windup; e.windupDuration = a.windup; e.targetX = g.player.x; e.targetY = g.player.y + 24;
+        g.prepareSignature(e);
+        for (let frame = 0; frame < Math.ceil((a.windup + a.duration + 0.3) * 60); frame++) {
+          g.time += 1 / 60; g.updateEnemy(e, 1 / 60); g.updateProjectiles(1 / 60); g.updateEffects(1 / 60);
+          if (frame % 20 === 0) { r.render(g, g.time); rendered++; }
+          if (!ordinary && frame === Math.floor((a.windup + 0.2) * 60)) { r.render(g, g.time); impacts[pattern] = canvas.toDataURL(); }
+        }
+      }
+      return { enemies, bosses, impacts, rendered };
+    });
+    assert.ok(bestiary.rendered > 250);
+    for (const [name, data] of Object.entries({ 'enemy-bestiary': bestiary.enemies, 'guardian-bestiary': bestiary.bosses, ...bestiary.impacts })) {
+      await writeFile(path.join(output, `${name}.png`), Buffer.from(data.split(',')[1], 'base64'));
+    }
     const visualMetrics = await page.evaluate(() => {
       const { renderer } = window.__VESPER__, original = { ...renderer.settings };
       renderer.settings.particles = false;

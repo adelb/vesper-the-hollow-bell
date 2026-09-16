@@ -174,6 +174,7 @@ test('striking quickly reclaims only recoverable health', () => {
   const enemy = game.enemies[0]; enemy.x = game.player.x + 44;
   game.strike();
   assert.ok(game.player.hp > 70 && game.player.hp <= 92.5);
+  game.enemies = [];
   game.player.rallyTimer = 0;
   advance(game, 2);
   assert.equal(game.player.rally, 0);

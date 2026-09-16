@@ -211,7 +211,17 @@ export class AudioEngine {
     if (!this.context || this.context.state !== 'running' || !this.settings.sound) return;
     const t = this.context.currentTime;
     const tone = (midi, delay, duration, volume = 0.08, type = 'triangle') => this.tone(midi, t + delay, duration, volume, type, this.effects);
-    if (name === 'boss-intro') {
+    if (name === 'foe-beam') {
+      this.noise(t, 0.3, 0.06, 4200);
+      for (const [i, n] of [60, 72, 79].entries()) tone(n, i * 0.025, 0.5, 0.025, 'sine');
+    } else if (name === 'foe-orbit') {
+      for (const [i, n] of [79, 86, 91].entries()) tone(n, i * 0.09, 0.8, 0.025, 'sine');
+    } else if (name === 'foe-waves' || name === 'foe-zones') {
+      this.drum(t, 0.16); this.noise(t, 0.35, 0.065, 800); tone(43, 0, 0.5, 0.05);
+    } else if (name === 'foe-combo' || name === 'foe-volley') {
+      this.noise(t, 0.17, 0.09, name === 'foe-combo' ? 1500 : 2800);
+      tone(name === 'foe-combo' ? 51 : 74, 0, 0.2, 0.035);
+    } else if (name === 'boss-intro') {
       const root = SCORES[this.chapter].root;
       for (const [i, n] of [0, 7, 13, 12].entries()) tone(root + n, i * 0.19, 3.7, 0.065);
       this.drum(t + 0.15, 0.18);

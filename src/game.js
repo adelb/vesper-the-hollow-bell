@@ -1,4 +1,5 @@
 import { CHAPTERS, HEIGHT, WIDTH, PROLOGUE, BOSS_DRAMA, ENEMY_CAST, NPCS } from './content.js';
+import { ATTACKS, attackColor, parryableAttack, beamHits } from './attacks.js';
 
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -54,10 +55,10 @@ export class Game {
         patrolMax: (platform ? platform.x + platform.w : enemyX + 50) - 55, reward: kind === 'brute' ? 45 : 28,
       };
     });
-    const spec = this.level.boss;
+    const spec = this.level.boss, drama = BOSS_DRAMA[index], [bossWidth, bossHeight] = drama.body;
     this.boss = {
-      ...spec, drama: BOSS_DRAMA[index], id: 'boss', x: this.level.arena + 430, y: 452 - (spec.kind === 'widow' ? 82 : 98),
-      w: spec.kind === 'widow' ? 84 : 58, h: spec.kind === 'widow' ? 82 : 98,
+      ...spec, drama, id: 'boss', x: this.level.arena + 430, y: 452 - bossHeight,
+      w: bossWidth, h: bossHeight,
       maxHp: spec.hp, hp: this.save.defeated.includes(index) ? 0 : spec.hp,
       vx: 0, vy: 0, facing: -1, state: 'idle', timer: 1, stagger: 0, flash: 0,
       attackCount: 0, phase: 1, active: false, isBoss: true, pattern: 'sweep',
@@ -435,12 +436,20 @@ export class Game {
     const p = this.player;
     const dx = p.x + p.w / 2 - (e.x + e.w / 2);
     const distance = Math.abs(dx);
-    if (!e.isBoss && distance > 650) return;
+    if (!e.isBoss && distance > 650) {
+      if (ATTACKS[e.pattern] && ['windup', 'strike'].includes(e.state)) {
+        e.state = 'idle'; e.timer = 0.6; e.vx = 0;
+        this.zones = this.zones.filter(z => z.owner !== e || !z.cancelWithOwner);
+        this.projectiles = this.projectiles.filter(b => b.owner !== e || !b.orbit);
+      }
+      return;
+    }
     if (e.isBoss && e.hp <= e.maxHp * 0.5 && e.phase === 1) {
       this.beginBossCinematic('mutation');
       return;
     }
     if (e.stagger > 0) {
+      if (ATTACKS[e.pattern] && ['windup', 'strike'].includes(e.state)) { e.state = 'recover'; e.timer = 0.9; }
       e.vx *= Math.max(0, 1 - dt * 10);
       this.physics(e, dt);
       return;
@@ -450,16 +459,18 @@ export class Game {
     if (e.state === 'idle') {
       e.facing = dx >= 0 ? 1 : -1;
       const ranged = ['acolyte', 'cantor', 'astronomer'].includes(e.kind);
-      const trigger = ranged ? 440 : e.isBoss ? 290 : e.species?.patterns.includes('leap') ? 195 : e.kind === 'brute' ? 150 : 80;
+      const next = this.patternFor(e, e.attackCount + 1), signature = ATTACKS[next];
+      const trigger = e.isBoss ? signature?.kind === 'combo' || next === 'sweep' ? e.w / 2 + (signature?.reach || 108) + 70 : 460 : e.species.range;
       if (distance < trigger && Math.abs(p.y + p.h - e.y - e.h) < 180 && e.timer <= 0) {
         e.state = 'windup'; e.vx = 0; e.attackCount++;
         e.pattern = this.patternFor(e);
         e.timer = this.windupFor(e);
         e.windupDuration = e.timer;
-        e.targetX = p.x;
+        e.targetX = p.x; e.targetY = p.y + p.h / 2;
         e.didHit = false;
         this.emit('sound', { name: 'tell' });
-        if (['meteor', 'roots'].includes(e.pattern)) {
+        if (ATTACKS[e.pattern]) this.prepareSignature(e);
+        else if (['meteor', 'roots'].includes(e.pattern)) {
           const count = e.isBoss ? e.phase === 2 ? 4 : 3 : 2;
           for (let i = 0; i < count; i++) {
             const x = clamp(p.x - 70 + i * 100, e.isBoss ? this.level.arena : e.patrolMin, e.isBoss ? this.level.width - 80 : e.patrolMax);
@@ -472,8 +483,17 @@ export class Game {
         }
       } else e.vx = distance > (ranged ? 300 : 55) ? e.facing * speed : 0;
     } else if (e.state === 'windup') {
-      e.vx = 0;
-      if (e.timer <= 0) {
+      const attack = ATTACKS[e.pattern];
+      e.vx = attack?.backstep && e.timer > e.windupDuration * 0.5 ? -e.facing * attack.backstep : 0;
+      if (attack?.teleport && !e.teleported && e.timer <= e.windupDuration * 0.65) {
+        this.burst(e.x + e.w / 2, e.y + e.h / 2, attackColor(e.pattern), 18, 110);
+        e.x = e.teleportX; e.facing = e.targetX > e.x ? 1 : -1; e.teleported = true;
+        this.burst(e.x + e.w / 2, e.y + e.h / 2, attackColor(e.pattern), 18, 110);
+      }
+      if (e.timer <= 0 && attack) {
+        e.state = 'strike'; e.timer = attack.duration; e.attackStep = -1; e.vx = 0;
+        this.updateSignature(e);
+      } else if (e.timer <= 0) {
         e.state = 'strike';
         e.timer = ['charge', 'leap'].includes(e.pattern) ? 0.68 : 0.28;
         if (e.pattern === 'charge') e.vx = e.facing * (e.isBoss ? 415 : 220);
@@ -488,7 +508,9 @@ export class Game {
         this.emit('sound', { name: e.isBoss ? 'boss-strike' : 'swing' });
       }
     } else if (e.state === 'strike') {
-      if (!e.didHit && ['sweep', 'charge', 'leap', 'blink'].includes(e.pattern)) {
+      const attack = ATTACKS[e.pattern];
+      if (attack) this.updateSignature(e);
+      else if (!e.didHit && ['sweep', 'charge', 'leap', 'blink'].includes(e.pattern)) {
         const reach = e.isBoss ? (e.pattern === 'sweep' ? 108 : 28) : e.kind === 'brute' ? 61 : 37;
         const hitbox = { x: e.facing > 0 ? e.x : e.x - reach, y: e.y + 6, w: e.w + reach, h: e.h - 4 };
         if (overlaps(hitbox, p)) {
@@ -497,7 +519,7 @@ export class Game {
         }
       }
       if (e.timer <= 0) {
-        e.state = 'recover'; e.timer = e.isBoss ? (e.phase === 2 ? 0.85 : 1.12) : 0.95; e.vx = 0;
+        e.state = 'recover'; e.timer = attack?.recovery ?? (e.isBoss ? (e.phase === 2 ? 0.85 : 1.12) : 0.95); e.vx = 0;
         if (e.pattern === 'leap') { this.shake = 7; this.burst(e.x + e.w / 2, 445, e.color || '#adad89', 25, 180); }
       }
     } else if (e.state === 'recover') {
@@ -517,26 +539,72 @@ export class Game {
     if (e.y > 600) { e.y = this.floorAt(e.x) - e.h; e.vy = 0; }
   }
 
-  patternFor(e) {
-    const n = e.attackCount;
-    if (!e.isBoss && e.species) return e.species.patterns[(n - 1) % e.species.patterns.length];
-    if (e.isBoss && e.phase === 2) return e.drama.patterns[(n - 1) % e.drama.patterns.length];
-    if (e.kind === 'acolyte') return 'bolt';
-    if (e.kind === 'warden') return n % 3 === 0 ? 'charge' : 'sweep';
-    if (e.kind === 'widow') return n % 2 === 0 ? 'leap' : e.phase === 2 && n % 3 === 0 ? 'nova' : 'sweep';
-    if (e.kind === 'cantor') return n % 3 === 0 ? 'sweep' : 'song';
-    if (e.kind === 'astronomer') return n % 2 === 0 ? 'meteor' : 'nova';
-    if (e.kind === 'heart') return ['sweep', 'charge', 'nova', 'leap'][n % 4];
-    return 'sweep';
+  patternFor(e, count = e.attackCount) {
+    const patterns = e.isBoss ? e.phase === 2 ? e.drama.patterns : e.drama.opening : e.species.patterns;
+    return patterns[(count - 1) % patterns.length];
   }
 
   windupFor(e) {
+    if (ATTACKS[e.pattern]) return ATTACKS[e.pattern].windup;
     const duration = ['meteor', 'roots', 'eclipse', 'rapture'].includes(e.pattern) ? 1.25 : e.pattern === 'leap' ? 0.95 : e.pattern === 'charge' ? 1 : e.isBoss ? 0.8 : e.kind === 'brute' ? 0.95 : 0.65;
     return duration * (e.phase === 2 ? 0.84 : 1);
   }
 
   shoot(e, angle, speed) {
-    this.projectiles.push({ x: e.x + e.w / 2, y: e.y + e.h * 0.4, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, w: 11, h: 11, life: 5, damage: e.isBoss ? 22 : 15, owner: e, wave: false, parryable: !['nova', 'eclipse', 'rapture', 'tidal'].includes(e.pattern), color: e.color || e.species?.trim || '#c4d2b7', curve: e.pattern === 'eclipse' ? 0.48 : e.pattern === 'rapture' ? -0.3 : 0 });
+    this.projectiles.push({ x: e.x + e.w / 2, y: e.y + e.h * 0.4, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, w: 11, h: 11, life: 5, damage: e.isBoss ? 22 : 15, owner: e, wave: false, parryable: parryableAttack(e.pattern), color: attackColor(e.pattern), curve: e.pattern === 'eclipse' ? 0.48 : e.pattern === 'rapture' ? -0.3 : 0 });
+  }
+
+  prepareSignature(e) {
+    const a = ATTACKS[e.pattern], color = attackColor(e.pattern);
+    const x = e.x + e.w / 2, y = e.y + e.h * 0.4;
+    e.aimAngle = Math.atan2(e.targetY - y, e.targetX + 12 - x);
+    e.attackStep = -1; e.teleported = false;
+    e.teleportX = clamp(e.targetX - this.player.facing * 100, e.patrolMin ?? this.level.arena + 20, e.patrolMax ?? this.level.width - 150);
+    if (a.kind === 'zones') {
+      const min = e.isBoss ? this.level.arena + 20 : e.patrolMin, max = e.isBoss ? this.level.width - 100 : e.patrolMax;
+      for (let i = 0; i < a.count; i++) {
+        const position = a.alternating ? this.level.arena + 45 + i * a.spacing : e.targetX + (i - (a.count - 1) / 2) * a.spacing;
+        const zoneX = clamp(position, min, max), order = a.alternating ? (i % 2 ? Math.ceil(a.count / 2) : 0) + Math.floor(i / 2) : i;
+        this.zones.push({ x: zoneX, y: this.floorAt(zoneX), radius: a.radius, height: a.height, timer: e.windupDuration + 0.1 + order * a.interval, life: 0.4, fired: false, owner: e, kind: a.visual, color, damage: a.damage, cancelWithOwner: true });
+      }
+    } else if (a.kind === 'beam') {
+      a.angles.forEach((offset, i) => {
+        const angle = e.aimAngle + offset;
+        this.zones.push({ x, y, endX: x + Math.cos(angle) * a.range, endY: y + Math.sin(angle) * a.range, width: a.width, timer: e.windupDuration + 0.08 + i * a.interval, life: 0.26, fired: false, owner: e, kind: 'beam', visual: a.visual, color, damage: a.damage, cancelWithOwner: true });
+      });
+    }
+  }
+
+  signatureBullet(e, angle, a) {
+    return { x: e.x + e.w / 2, y: e.y + e.h * 0.4, vx: Math.cos(angle) * a.speed, vy: Math.sin(angle) * a.speed, w: ['anchor', 'cleaver', 'censer'].includes(a.visual) ? 22 : 12, h: 12, life: 5, age: 0, owner: e, damage: a.damage, color: attackColor(e.pattern), parryable: a.parryable, visual: a.visual, curve: a.curve || 0, gravity: a.gravity || 0, returning: a.returning, split: a.split, planting: a.planting };
+  }
+
+  updateSignature(e) {
+    const a = ATTACKS[e.pattern], elapsed = a.duration - e.timer;
+    const beats = a.beats || [0];
+    while (e.attackStep + 1 < beats.length && elapsed >= beats[e.attackStep + 1]) {
+      e.attackStep++; e.didHit = false;
+      this.emit('sound', { name: `foe-${a.kind}` });
+      if (a.kind === 'volley') {
+        for (let i = 0; i < a.count; i++) {
+          const angle = e.aimAngle + (i - (a.count - 1) / 2) * (a.spread || 0) - (a.planting ? e.facing * 0.55 : 0);
+          this.projectiles.push(this.signatureBullet(e, angle, a));
+        }
+      } else if (a.kind === 'orbit') {
+        for (let i = 0; i < a.count; i++) this.projectiles.push({ ...this.signatureBullet(e, 0, a), orbit: true, orbitAngle: i * Math.PI * 2 / a.count, orbitRadius: a.radius, release: 0.55 + i * a.interval });
+      } else if (a.kind === 'waves' || a.shock && e.attackStep === beats.length - 1) {
+        for (const direction of [-1, 1]) this.projectiles.push({ ...this.signatureBullet(e, 0, a), x: e.x + e.w / 2, y: this.floorAt(e.x) - 18, vx: direction * (a.speed || 200), vy: 0, w: 28, h: 20, wave: true, parryable: false, color: '#c2a4ec' });
+      }
+    }
+    if (a.kind === 'combo') {
+      const active = e.attackStep >= 0 && elapsed - beats[e.attackStep] < 0.2;
+      e.vx = active ? e.facing * a.speed : 0;
+      const hitbox = { x: e.facing > 0 ? e.x : e.x - a.reach, y: e.y + e.h * 0.25, w: e.w + a.reach, h: e.h * 0.75 };
+      if (active && !e.didHit && overlaps(hitbox, this.player)) {
+        e.didHit = true;
+        this.hurtPlayer(a.damage, e, a.parryable);
+      }
+    }
   }
 
   wave(e, direction) {
@@ -544,13 +612,46 @@ export class Game {
   }
 
   updateProjectiles(dt) {
-    for (const bolt of this.projectiles) {
+    for (const bolt of [...this.projectiles]) {
+      bolt.age = (bolt.age || 0) + dt;
+      if (bolt.orbit) {
+        if (bolt.owner.hp <= 0 || bolt.owner.stagger > 0) { bolt.life = 0; continue; }
+        if (bolt.age < bolt.release) {
+          const angle = bolt.orbitAngle + bolt.age * 2.4;
+          bolt.x = bolt.owner.x + bolt.owner.w / 2 + Math.cos(angle) * bolt.orbitRadius;
+          bolt.y = bolt.owner.y + bolt.owner.h * 0.4 + Math.sin(angle) * bolt.orbitRadius * 0.65;
+          bolt.life -= dt;
+          continue;
+        }
+        bolt.orbit = false;
+        const speed = Math.hypot(bolt.vx, bolt.vy), angle = Math.atan2(this.player.y + 24 - bolt.y, this.player.x + 12 - bolt.x);
+        bolt.vx = Math.cos(angle) * speed; bolt.vy = Math.sin(angle) * speed;
+      }
+      if (bolt.returning && bolt.age > bolt.returning) {
+        const dx = bolt.owner.x + bolt.owner.w / 2 - bolt.x, dy = bolt.owner.y + bolt.owner.h * 0.4 - bolt.y, distance = Math.hypot(dx, dy);
+        if (distance < 18 || bolt.owner.hp <= 0) { bolt.life = 0; continue; }
+        bolt.vx = dx / distance * 285; bolt.vy = dy / distance * 285;
+      }
       if (bolt.curve) {
         const angle = bolt.curve * dt, x = bolt.vx;
         bolt.vx = x * Math.cos(angle) - bolt.vy * Math.sin(angle);
         bolt.vy = x * Math.sin(angle) + bolt.vy * Math.cos(angle);
       }
+      bolt.vy += (bolt.gravity || 0) * dt;
       bolt.x += bolt.vx * dt; bolt.y += bolt.vy * dt; bolt.life -= dt;
+      if (bolt.split && bolt.age >= 0.75) {
+        const angle = Math.atan2(bolt.vy, bolt.vx);
+        for (let i = 0; i < bolt.split; i++) {
+          const direction = angle + (i - (bolt.split - 1) / 2) * 0.5;
+          this.projectiles.push({ ...bolt, vx: Math.cos(direction) * 205, vy: Math.sin(direction) * 205, split: 0, age: 0, w: 8, h: 8, life: 3, damage: Math.round(bolt.damage * 0.8), visual: 'shard' });
+        }
+        bolt.life = 0; this.burst(bolt.x, bolt.y, bolt.color, 9, 70);
+      }
+      if (bolt.planting && bolt.vy > 0 && bolt.y >= this.floorAt(bolt.x)) {
+        const floor = this.platforms.find(f => f.y >= 390 && bolt.x >= f.x && bolt.x <= f.x + f.w);
+        if (floor) this.zones.push({ x: bolt.x, y: floor.y, radius: 26, height: 72, timer: 0.9, life: 0.4, fired: false, owner: bolt.owner, kind: 'roots', color: '#c2a4ec', damage: 18 });
+        bolt.life = 0;
+      }
       if (bolt.life > 0 && overlaps(bolt, this.player)) {
         this.hurtPlayer(bolt.damage, bolt.owner, !bolt.wave && bolt.parryable !== false);
         bolt.life = 0;
@@ -559,13 +660,17 @@ export class Game {
     }
     this.projectiles = this.projectiles.filter(b => b.life > 0 && b.y < 650 && b.x > 0 && b.x < this.level.width);
     for (const zone of this.zones) {
+      if (zone.cancelWithOwner && (zone.owner.hp <= 0 || zone.owner.stagger > 0)) { zone.life = 0; continue; }
       zone.timer -= dt;
       if (zone.timer <= 0 && !zone.fired) {
         zone.fired = true;
-        this.burst(zone.x, zone.y - 30, '#cab2df', 22, 180);
+        this.burst(zone.x, zone.y - (zone.kind === 'beam' ? 0 : 30), zone.color || '#cab2df', 14, 150);
         this.shake = 5;
-        this.emit('sound', { name: 'heavy' });
-        if (Math.abs(this.player.x + 12 - zone.x) < zone.radius + 12 && this.player.y + this.player.h > zone.y - 100) this.hurtPlayer(30, zone.owner, false);
+        this.emit('sound', { name: zone.kind === 'beam' ? 'foe-beam' : 'heavy' });
+      }
+      if (zone.fired && !zone.hit) {
+        const hit = zone.kind === 'beam' ? beamHits(this.player, zone) : overlaps(this.player, { x: zone.x - zone.radius, y: zone.y - (zone.height || 100), w: zone.radius * 2, h: zone.height || 100 });
+        if (hit) { zone.hit = true; this.hurtPlayer(zone.damage || 30, zone.owner, false); }
       }
       if (zone.fired) zone.life -= dt;
     }
