@@ -4,7 +4,9 @@ An original, single-player gothic pixel-art action platformer for the browser. *
 
 ## Play
 
-**Hosted edition:** https://adelb.github.io/vesper-the-hollow-bell/
+**Azure App Service:** https://vesper-the-hollow-bell.azurewebsites.net/
+
+**GitHub Pages mirror:** https://adelb.github.io/vesper-the-hollow-bell/
 
 A modern browser with Canvas 2D and Web Audio is required. Keyboard/mouse, standard-mapped gamepads, and touch controls are supported. Landscape orientation is recommended on phones. Audio starts after a player gesture. No account, installation, backend, or external asset service is required.
 
@@ -85,6 +87,8 @@ Rest at any lamp in a district to refill health/tinctures, save a checkpoint, an
 
 Progress uses browser `localStorage`: `vesper.save.v1` and `vesper.settings.v1`. Saves are local to the current browser and site origin, not cloud-synced. Progress autosaves at lamps, deaths, boss victories, travel, upgrades, completed introductions/conversations, and periodically during play. Continuing resumes at the saved lamp, not the exact position where the tab closed. Export/import JSON backups in Settings to move progress between browsers.
 
+**Moving from GitHub Pages to Azure:** export your save from Settings on the GitHub Pages site, then import that JSON file in Settings on the Azure site. Different hosting domains have separate browser storage; saves do not transfer automatically.
+
 **Existing 1.0–1.2 saves are preserved.** The `talked`, `introduced`, `prologueSeen`, and `memories` fields migrate automatically when absent, retaining upgrades, echoes, cleared guardians, and endings. Players arriving from 1.0 see the Reawakening prologue once and can skip it; no new pilgrimage is required. The Long Night adds lamp indices 2 and 3 while preserving the meaning and positions of indices 0 and 1. Echo markers support the extended world bounds. Previously defeated guardians stay defeated.
 
 If storage is blocked, full, or corrupt, the game displays a warning. Corrupt saves are not silently overwritten; play becomes session-only until the player explicitly starts a new pilgrimage or imports a valid save. Export before closing a session-only game.
@@ -125,10 +129,28 @@ The expansion suite checks all four lamps in each district, traverses both eleva
 
 The game is entirely static. `npm run build` produces `dist`, with relative asset paths so it can be hosted at a domain root or a subdirectory.
 
-- **GitHub Pages (current deployment):** source is on `main`; the compiled site is on `gh-pages`. Pages uses **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`. Run `npm run deploy` to build and update it. The deploy script requires Git and an authenticated GitHub CLI (`gh auth login`). It keeps a generated, ignored `.deploy` checkout and preserves deployment history without force-pushing.
+- **GitHub Pages (mirror):** source is on `main`; the compiled site is on `gh-pages`. Pages uses **Deploy from a branch**, branch `gh-pages`, folder `/ (root)`. Run `npm run deploy` to build and update it. The deploy script requires Git and an authenticated GitHub CLI (`gh auth login`). It keeps a generated, ignored `.deploy` checkout and preserves deployment history without force-pushing.
 - **Optional automated deployment:** with workflow-write authorization, copy `deployment/github-pages.yml` to `.github/workflows/deploy.yml`, and change Pages' source to **GitHub Actions**. It tests, builds, and deploys pushes to `main`. This workflow is a template, not an installed workflow.
 - **Vercel:** import the project with the included `vercel.json`, or run `vercel --prod` with valid authorization.
 - **Other static hosting:** upload the contents of `dist`. No environment variables or secrets are needed.
+
+### Azure App Service deployment
+
+The Azure deployment is a **Windows App Service** named `vesper-the-hollow-bell`, in resource group `rg-vesper-web`, on the `asp-vesper-free` **F1** plan in **West Europe**. This is an App Service resource, not Azure Static Web Apps. F1 is a free, quota-limited tier for low-traffic use, without Always On or a production availability SLA.
+
+IIS serves the production build directly; no Node.js server or runtime dependencies are needed in Azure. `public/web.config` configures the entry document, font MIME types, and caching: HTML revalidates while hashed assets receive long-lived caching. HTTPS is enforced, FTP is disabled, and publishing uses Azure CLI authentication rather than embedded passwords. ZIP packages are mounted read-only with `WEBSITE_RUN_FROM_PACKAGE=1` so updates switch complete builds.
+
+To update the existing App Service from Windows with Node.js, PowerShell, and Azure CLI installed:
+
+```powershell
+az login
+az account show --query name --output tsv
+npm run deploy:azure
+```
+
+To target another existing Windows App Service, pass `-ResourceGroup`, `-Name`, and optionally `-Subscription` after `npm run deploy:azure --`. The script builds locally, uploads only `dist` contents, and removes its temporary archive even on failure. It does not create, resize, or delete Azure resources. `npm run deploy` still updates GitHub Pages independently.
+
+Check a deployed build with `$env:VESPER_URL = 'https://vesper-the-hollow-bell.azurewebsites.net/'; npm run test:browser`.
 
 ## Art, sound, and implementation
 
