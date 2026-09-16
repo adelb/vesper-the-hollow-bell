@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c1213" />
+    <meta name="description" content="Enter Vesper, an original gothic pixel-art soulslike. Five haunted districts. Five fallen guardians. One last bell. Play free in your browser." />
+    <meta property="og:title" content="Vesper — The Hollow Bell" />
+    <meta property="og:description" content="Death is a debt. Not an end. An original five-chapter gothic action platformer, playable in your browser." />
+    <title>Vesper — The Hollow Bell</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="module" crossorigin src="./assets/index-1hIkTSXc.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C46C24e6.css">
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="masthead">
+        <a class="wordmark" href="./" aria-label="Vesper home">
+          <svg class="bell-mark" viewBox="0 0 40 48" aria-hidden="true"><path d="M5 34h30l-5-9V17C30 2 10 2 10 17v8zM15 39h10l-5 7z"/><path class="bell-crack" d="m22 7-6 13 7 4-8 13"/></svg>
+          <span>VESPER<small>THE HOLLOW BELL</small></span>
+        </a>
+        <nav aria-label="Game navigation">
+          <button class="nav-link" data-open="chapters">The pilgrimage <span>05</span></button>
+          <button class="nav-link" data-open="journal">The archive</button>
+          <button class="nav-link" data-open="controls">How to play <span>↗</span></button>
+        </nav>
+        <div class="header-end"><span class="status-dot"></span> BROWSER EDITION <span class="version">/ 1.0</span></div>
+      </header>
+
+      <main>
+        <div class="above-stage"><span><i></i> AN ORIGINAL GOTHIC ACTION RPG</span><span>HEADPHONES RECOMMENDED <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 11V9a6 6 0 0 1 12 0v2M3 10h3v7H3zm11 0h3v7h-3z"/></svg></span></div>
+        <section class="game-frame" id="game-frame" aria-label="Vesper game">
+          <canvas id="game" width="960" height="540" tabindex="0" aria-label="Vesper platforming game. Use A and D to move, Space to jump, J to attack, Shift to dodge, L to parry, F to heal, and E to interact."></canvas>
+          <div class="vignette" aria-hidden="true"></div>
+          <div class="frame-corner corner-tl"></div><div class="frame-corner corner-tr"></div><div class="frame-corner corner-bl"></div><div class="frame-corner corner-br"></div>
+
+          <div class="home-screen" id="home-screen">
+            <div class="home-copy">
+              <div class="eyebrow"><span class="fine-line"></span> THE CITY IS SLEEPING. IT MUST NOT WAKE.</div>
+              <h1>VESPER</h1>
+              <div class="subtitle"><span></span> THE HOLLOW BELL <span></span></div>
+              <p>The last light is yours to carry.<br />Descend into a city that has forgotten how to die.</p>
+              <div class="begin-actions">
+                <button class="primary-button" id="begin-button"><span class="button-sigil">✧</span><span id="begin-label">Begin the pilgrimage</span><span class="button-arrow">→</span></button>
+                <button class="text-button" id="new-button" hidden>Begin again</button>
+              </div>
+              <div class="home-details"><span>5 CHAPTERS</span><b>·</b><span>5 FALLEN GUARDIANS</span><b>·</b><span>ONE LAST BELL</span></div>
+            </div>
+            <div class="scene-caption"><span class="caption-rule"></span><span>I &nbsp; / &nbsp; THE GASLIT WARD<small>Where the lanterns burn for no one.</small></span></div>
+            <div class="home-bottom"><span class="tiny-diamond">◇</span> DEATH IS A DEBT. NOT AN END.</div>
+          </div>
+
+          <div class="hud" id="hud" hidden>
+            <div class="player-status"><div class="hunter-seal">V</div><div class="status-bars"><div class="health-row"><span id="player-name">THE LAMPLIGHTER</span><span id="health-value">100 / 100</span></div><div class="health-track"><div id="rally-fill"></div><div id="health-fill"></div></div><div class="stamina-track"><div id="stamina-fill"></div></div></div><div class="inventory"><span title="Healing tinctures"><b class="flask-icon">♜</b> <span id="flask-value">3</span></span><span title="Carried echoes"><b class="echo-icon">✧</b> <span id="echo-value">0</span></span></div></div>
+            <div class="chapter-hud"><span id="chapter-number">CHAPTER I</span><b id="chapter-title">The Gaslit Ward</b></div>
+            <button class="icon-button pause-button" id="pause-button" aria-label="Pause game">Ⅱ</button>
+            <div class="boss-hud" id="boss-hud" hidden><div><span id="boss-phase">FALLEN GUARDIAN</span><b id="boss-name"></b><span id="boss-health"></span></div><div class="boss-track"><div id="boss-fill"></div></div></div>
+            <div class="interact-prompt" id="interact-prompt" hidden><kbd>E</kbd><span></span></div>
+            <div class="keyboard-hints" id="keyboard-hints"><span><kbd>A</kbd><kbd>D</kbd> move</span><span><kbd>SPACE</kbd> jump</span><span><kbd>J</kbd> strike</span><span><kbd>SHIFT</kbd> dodge</span><span><kbd>L</kbd> parry</span><span><kbd>F</kbd> heal</span></div>
+          </div>
+
+          <div class="chapter-announcement" id="chapter-announcement" hidden><span></span><h2></h2><p></p></div>
+          <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+          <div class="stage-tools"><button class="icon-button" id="sound-button" aria-label="Enable sound" title="Toggle sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c3 2 3 6 0 8M19 5c5 4 5 10 0 14"/></svg><span id="sound-state">SOUND OFF</span></button><button class="icon-button" data-open="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6"/></svg></button><button class="icon-button" id="fullscreen-button" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button></div>
+
+          <div class="touch-controls" id="touch-controls" hidden aria-label="Touch controls">
+            <div class="touch-movement"><button data-action="left" aria-label="Move left">◀</button><button data-action="right" aria-label="Move right">▶</button></div>
+            <div class="touch-utility"><button data-action="heal" aria-label="Heal">F<span>HEAL</span></button><button data-action="interact" aria-label="Interact">E<span>USE</span></button><button data-action="parry" aria-label="Parry">L<span>PARRY</span></button></div>
+            <div class="touch-combat"><button data-action="dash" aria-label="Dodge">⇢</button><button data-action="attack" aria-label="Attack">⚔</button><button data-action="jump" aria-label="Jump">↑</button><button data-action="heavy" aria-label="Heavy attack">K<span>HEAVY</span></button></div>
+          </div>
+          <div class="modal-layer" id="modal-layer" hidden><section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section></div>
+        </section>
+
+        <section class="chapter-strip" aria-label="The five chapters">
+          <button data-chapter="0" class="chapter-tile current"><span class="chapter-roman">I</span><span><small>SMOKE & STONE</small>The Gaslit Ward</span><span class="chapter-marker">◇</span></button>
+          <button data-chapter="1" class="chapter-tile locked"><span class="chapter-roman">II</span><span><small>ROOT & ROT</small>The Weeping Garden</span><span class="chapter-marker">·</span></button>
+          <button data-chapter="2" class="chapter-tile locked"><span class="chapter-roman">III</span><span><small>SALT & SILENCE</small>The Drowned Choir</span><span class="chapter-marker">·</span></button>
+          <button data-chapter="3" class="chapter-tile locked"><span class="chapter-roman">IV</span><span><small>ASH & ASTRAL DUST</small>The Astral Spire</span><span class="chapter-marker">·</span></button>
+          <button data-chapter="4" class="chapter-tile locked"><span class="chapter-roman">V</span><span><small>FLESH & FORGIVENESS</small>The Hollow Heart</span><span class="chapter-marker">·</span></button>
+        </section>
+      </main>
+
+      <footer class="site-footer"><span>A WORLD BETWEEN THE LAST BREATH AND THE FIRST BELL.</span><span>ORIGINAL ART & SCORE <i>✧</i> BUILT FOR THE BROWSER</span></footer>
+    </div>
+  </body>
+</html>
