@@ -2,7 +2,7 @@ export const SAVE_KEY = 'vesper.save.v1';
 export const SETTINGS_KEY = 'vesper.settings.v1';
 
 export function freshSave() {
-  return { version: 1, chapter: 0, unlocked: 0, checkpoint: 0, echoes: 0, vitality: 0, blade: 0, defeated: [], notes: [], deaths: 0, bloodstain: null, ending: null, started: false, playtime: 0 };
+  return { version: 1, chapter: 0, unlocked: 0, checkpoint: 0, echoes: 0, vitality: 0, blade: 0, defeated: [], notes: [], talked: [], introduced: [], prologueSeen: false, deaths: 0, bloodstain: null, ending: null, started: false, playtime: 0 };
 }
 
 const integer = (value, max) => Number.isInteger(value) && value >= 0 && value <= max;
@@ -12,9 +12,11 @@ export function validateSave(value) {
     if (!integer(value[key], max)) throw new Error(`The save contains an invalid ${key}.`);
   }
   if (value.chapter > value.unlocked) throw new Error('The save contains a locked chapter.');
-  for (const key of ['defeated', 'notes']) {
-    if (!Array.isArray(value[key]) || value[key].some(n => !integer(n, 4))) throw new Error(`The save contains invalid ${key}.`);
+  const normalized = { ...value, talked: value.talked === undefined ? [] : value.talked, introduced: value.introduced === undefined ? [] : value.introduced, prologueSeen: value.prologueSeen === undefined ? false : value.prologueSeen };
+  for (const key of ['defeated', 'notes', 'talked', 'introduced']) {
+    if (!Array.isArray(normalized[key]) || normalized[key].some(n => !integer(n, 4))) throw new Error(`The save contains invalid ${key}.`);
   }
+  if (typeof normalized.prologueSeen !== 'boolean') throw new Error('The save contains an invalid prologue state.');
   if (typeof value.started !== 'boolean' || ![null, 'dawn', 'keeper'].includes(value.ending)) throw new Error('The save is incomplete.');
   if (value.bloodstain !== null) {
     const b = value.bloodstain;
@@ -22,7 +24,7 @@ export function validateSave(value) {
       throw new Error('The save contains an invalid echo marker.');
     }
   }
-  return { ...freshSave(), ...value, defeated: [...new Set(value.defeated)], notes: [...new Set(value.notes)] };
+  return { ...freshSave(), ...normalized, defeated: [...new Set(value.defeated)], notes: [...new Set(value.notes)], talked: [...new Set(normalized.talked)], introduced: [...new Set(normalized.introduced)] };
 }
 
 export function loadSave(storage) {

@@ -1,18 +1,7 @@
-import { CHAPTERS, WIDTH, HEIGHT } from './content.js';
-
-function random(seed) {
-  return () => { seed |= 0; seed = seed + 0x6d2b79f5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
-}
-const rect = (c, x, y, w, h, color) => { c.fillStyle = color; c.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); };
-function polygon(c, points, color) { c.fillStyle = color; c.beginPath(); points.forEach(([x, y], i) => i ? c.lineTo(Math.round(x), Math.round(y)) : c.moveTo(Math.round(x), Math.round(y))); c.closePath(); c.fill(); }
-function line(c, x1, y1, x2, y2, color, width = 1) { c.strokeStyle = color; c.lineWidth = width; c.beginPath(); c.moveTo(Math.round(x1), Math.round(y1)); c.lineTo(Math.round(x2), Math.round(y2)); c.stroke(); }
-function glow(c, x, y, r, color, strength = 0.3) {
-  c.save(); c.globalAlpha *= strength;
-  const g = c.createRadialGradient(x, y, 0, x, y, r);
-  g.addColorStop(0, color); g.addColorStop(1, 'transparent');
-  c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); c.restore();
-}
-function surface(w, h) { const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; return canvas; }
+import { CHAPTERS, WIDTH, HEIGHT, PROLOGUE, NPCS } from './content.js';
+import { random, rect, polygon, line, glow, surface, shape, oval, limb } from './art.js';
+import { drawHunter, drawEnemy, drawBoss, drawNPC } from './actors.js';
+import { livingWorld } from './world.js';
 
 function gothicWindow(c, x, y, w, h, lit, palette, detailed = true) {
   polygon(c, [[x, y + h], [x, y + w / 2], [x + w / 2, y], [x + w, y + w / 2], [x + w, y + h]], '#0c1c20');
@@ -143,36 +132,33 @@ export class Renderer {
     const p = CHAPTERS[index].palette, rng = random(518 + index * 783);
     const far = surface(1920, 540), mid = surface(2300, 540), architecture = surface(1600, 540);
     const fc = far.getContext('2d'), mc = mid.getContext('2d'), ac = architecture.getContext('2d');
-    for (let x = -50; x < 1920; x += 35 + rng() * 35) {
+    for (let x = -50; index < 3 && x < 1920; x += 35 + rng() * 35) {
       const h = 90 + rng() * 150;
       house(fc, x, 426, 35 + rng() * 50, h, p, rng, 0);
       if (rng() > 0.77) spire(fc, x + 5, 426 - h - 100, 30, 130, p.far, p.mid);
     }
-    for (let x = -20; x < 2300; x += 105 + rng() * 65) {
+    for (let x = -20; index < 2 && x < 2300; x += 105 + rng() * 65) {
       house(mc, x, 479, 70 + rng() * 75, 120 + rng() * 120, p, rng, 1);
     }
     if (index === 1) {
       for (const x of [180, 380, 640, 910, 1250, 1440]) tree(ac, x, 470, 290 + rng() * 80, p, rng);
       cathedral(ac, 770, 455, p, rng, 0.58);
     } else if (index === 2) {
-      cathedral(ac, 650, 500, p, rng, 1.08);
+      cathedral(ac, 650, 500, p, rng, 0.72);
       for (let x = 60; x < 1550; x += 220) {
         rect(ac, x, 40, 22, 450, '#30444a');
         rect(ac, x + 3, 40, 4, 450, '#678183');
         polygon(ac, [[x + 20, 110], [x + 110, 30], [x + 220, 110], [x + 220, 70], [x + 110, -10], [x + 20, 70]], '#324b50');
       }
     } else if (index === 3) {
-      cathedral(ac, 710, 487, p, rng, 0.92);
-      ac.strokeStyle = '#938a94'; ac.lineWidth = 3;
-      for (const rad of [70, 93, 112]) { ac.beginPath(); ac.ellipse(1040, 270, rad, rad * 0.55, -0.5, 0, Math.PI * 2); ac.stroke(); }
-      spire(ac, 1010, 280, 60, 200, '#383c4c', '#8c819a');
-      for (let y = 135; y < 280; y += 10) rect(ac, 1039, y, 2, 4, '#bea8be');
+      for (let x = 60; x < 1580; x += 280) {
+        spire(ac, x, 250 + rng() * 80, 43, 240, '#383c4c', '#8c819a');
+        for (let n = 0; n < 4; n++) gothicWindow(ac, x + 12, 365 + n * 30, 12, 23, n % 2 === 0, p);
+      }
     } else if (index === 4) {
-      cathedral(ac, 700, 485, p, rng, 0.92);
-      for (let i = 0; i < 17; i++) {
-        const x = i * 100;
-        polygon(ac, [[x, 0], [x + 15, 0], [x + 28, 155], [x + 65, 300], [x + 52, 298], [x + 17, 169]], '#52363d');
-        line(ac, x + 15, 0, x + 22, 150, '#9c6c6b', 2);
+      for (let i = 0; i < 14; i++) {
+        const x = i * 119;
+        shape(ac, [[x, 530], [x + 9, 293], [x + 55, 164], [x + 107, 291], [x + 112, 530], [x + 100, 523], [x + 95, 299], [x + 55, 187], [x + 24, 303], [x + 20, 530]], '#553d49', '#77555e');
       }
     } else cathedral(ac, 760, 460, p, rng, 1.02);
     const result = { far, mid, architecture };
@@ -182,11 +168,12 @@ export class Renderer {
 
   background(index, camera, time, menu = false) {
     const c = this.ctx, p = CHAPTERS[index].palette, layers = this.layers(index);
+    if (this.settings.reducedMotion) time = 8;
     const sky = c.createLinearGradient(0, 0, 0, HEIGHT);
     sky.addColorStop(0, '#09151d'); sky.addColorStop(0.45, p.sky); sky.addColorStop(1, p.fog);
     c.fillStyle = sky; c.fillRect(0, 0, WIDTH, HEIGHT);
     const moonX = menu ? 684 : 688 - camera * 0.025, moonY = index === 4 ? 155 : 118;
-    const radius = menu ? 77 : 65;
+    const radius = index === 4 ? 0 : menu ? 77 : index === 2 ? 45 : 65;
     glow(c, moonX, moonY, 190, p.moon, 0.12);
     for (const s of this.stars) rect(c, (s.x - camera * 0.016 + WIDTH) % WIDTH, s.y, s.size, s.size, '#617979');
     for (let y = -radius; y <= radius; y += 2) {
@@ -219,7 +206,8 @@ export class Renderer {
       rect(c, 0, 487, WIDTH, 53, '#163a46');
       for (let i = 0; i < 55; i++) rect(c, (i * 117 + time * 6) % WIDTH, 490 + i % 22 * 2, 6 + i % 8 * 4, 1, '#4c7d84');
     }
-    this.birds(time, camera);
+    if (index < 2) this.birds(time, camera);
+    livingWorld(c, index, camera, time, this.settings, menu);
   }
 
   tileLayer(layer, offset, opacity) {
@@ -315,92 +303,13 @@ export class Renderer {
   }
 
   drawHunter(p, time, alpha = 1) {
-    const c = this.ctx;
-    c.save();
-    c.globalAlpha = alpha * (p.invulnerable > 0.25 && p.hurt > 0 && Math.floor(time * 22) % 2 === 0 ? 0.45 : 1);
-    const moving = Math.abs(p.vx || 0) > 25;
-    const running = Math.sin(time * 15);
-    const bob = p.grounded && moving ? Math.abs(running) * 1.3 : 0;
-    c.translate(Math.round(p.x + 12), Math.round(p.y + 48 - bob));
-    c.scale(p.facing * 2, 2);
-    if (p.dash > 0) c.rotate(0.18);
-    const cape = moving ? 6 + Math.abs(running) * 2 : Math.sin(time * 2) * 2;
-    polygon(c, [[-5, -22], [-9, -16], [-10 - cape, -5], [-6, -8], [-3, -4], [1, -17]], '#1a292c');
-    line(c, -7, -19, -10 - cape, -5, '#677267');
-    polygon(c, [[-6, -20], [4, -20], [6, -9], [8, -4], [1, -6], [-3, -3], [-8, -5]], '#52605a');
-    polygon(c, [[-5, -19], [-1, -18], [-3, -7], [-7, -5]], '#364743');
-    rect(c, -1, -19, 3, 12, '#849083'); rect(c, 0, -16, 1, 2, '#cfb87f'); rect(c, 0, -12, 1, 2, '#cfb87f');
-    rect(c, -4, -9, 9, 2, '#282c27'); rect(c, 0, -9, 2, 2, '#b7a073');
-    const leg = p.grounded ? (moving ? running * 3 : 0) : 3;
-    rect(c, -5 - leg, -5, 4, 5, '#172629'); rect(c, 1 + leg, -5, 4, 5, '#202f2e');
-    rect(c, -6 - leg, -1, 6, 2, '#101e24'); rect(c, 1 + leg, -1, 6, 2, '#101e24');
-    rect(c, -4, -27, 8, 7, '#a4a18a'); rect(c, 2, -25, 4, 4, '#bbc2a7');
-    rect(c, 3, -26, 3, 1, '#14282b'); rect(c, -5, -22, 9, 3, '#78473e');
-    polygon(c, [[-5, -22], [-10, -21], [-15 - cape, -16], [-7, -19], [3, -21]], '#965e4b');
-    rect(c, -6, -32, 10, 6, '#192a2c'); rect(c, -5, -33, 8, 2, '#354440');
-    rect(c, -10, -27, 18, 2, '#1a2b2d'); rect(c, -8, -27, 16, 1, '#758073');
-    rect(c, -6, -29, 11, 2, '#665c46');
-    if (p.heal > 0) {
-      rect(c, 5, -24, 3, 8, '#a6a58b'); rect(c, 5, -25, 4, 4, '#d3b66e');
-      glow(c, 5, -19, 21, '#eccb7f', 0.3);
-    } else if (p.parry > 0) {
-      rect(c, 5, -22, 10, 4, '#687a73'); rect(c, 13, -29, 3, 16, '#d0d7b8');
-      rect(c, 10, -25, 9, 2, '#adbdad');
-      glow(c, 16, -22, 23, '#d2eadc', 0.4);
-    } else if (p.attack > 0) {
-      const elapsed = p.attackDuration - p.attack;
-      const a = p.attackKind === 'heavy' ? -2 + elapsed * 7 : -1.8 + elapsed * 10;
-      c.save(); c.translate(4, -18); c.rotate(a);
-      rect(c, 0, -2, 10, 4, '#6d7d73'); rect(c, 8, -1, 24, 2, '#d3d6be');
-      rect(c, 28, -4, 5, 6, '#d3d6be'); rect(c, 10, 1, 20, 1, '#6c9a9b'); rect(c, 7, -4, 2, 7, '#bca66c');
-      c.restore();
-      if (elapsed > 0.07 && elapsed < 0.29) {
-        for (let i = 0; i < 22; i++) {
-          const angle = -1.9 + i * 0.14;
-          rect(c, 3 + Math.cos(angle) * (p.attackKind === 'heavy' ? 43 : 34), -17 + Math.sin(angle) * 28, 2, 2, i > 15 ? '#dfe5cd' : '#8da8a0');
-        }
-      }
-    } else {
-      rect(c, 4, -19, 4, 10, '#758074'); rect(c, 6, -11, 3, 3, '#b7b6a0');
-      polygon(c, [[7, -10], [10, -9], [23, -2], [25, 2], [20, 0]], '#b7c7bc');
-      line(c, 9, -10, 24, 0, '#e0ddbb'); rect(c, 5, -11, 5, 2, '#b6a16c');
-    }
-    rect(c, -8, -18, 4, 10, '#34433f');
-    rect(c, -9, -10, 4, 4, '#a8a78b');
-    rect(c, -11, -7, 7, 8, '#33433b'); rect(c, -10, -6, 5, 6, '#e1b86c'); rect(c, -9, -5, 2, 4, '#fbe6ac');
-    c.restore();
-    if (alpha === 1) glow(c, p.x + 12 - p.facing * 15, p.y + 42, 50, '#e1b56c', 0.16);
+    drawHunter(this.ctx, p, time, alpha);
   }
 
   drawEnemy(e, time) {
     if (e.hp <= 0) return;
     const c = this.ctx;
-    c.save();
-    const bob = Math.abs(e.vx) > 5 ? Math.sin(time * 10) * 2 : Math.sin(time * 2) * 1;
-    c.translate(Math.round(e.x + e.w / 2), Math.round(e.y + e.h + bob));
-    c.scale(e.facing * 2, 2);
-    const flash = e.flash > 0, body = flash ? '#e3dec2' : '#4c5650', shadow = flash ? '#bcbca8' : '#293b3b';
-    const scale = e.kind === 'brute' ? 1.25 : 1;
-    c.scale(scale, scale);
-    rect(c, -6, -7, 4, 7, '#14262a'); rect(c, 3, -7, 4, 7, '#192b2b');
-    polygon(c, [[-8, -19], [4, -21], [8, -6], [-9, -5]], body);
-    polygon(c, [[-8, -19], [-2, -18], [-4, -6], [-10, -4]], shadow);
-    rect(c, -5, -26, 9, 8, body);
-    if (e.kind === 'acolyte') {
-      polygon(c, [[-8, -22], [-3, -32], [7, -21]], shadow);
-      rect(c, 3, -23, 3, 1, '#cfc798'); rect(c, 5, -18, 15, 3, '#908b70'); rect(c, 15, -21, 4, 7, '#b8b698');
-    } else {
-      rect(c, 1, -24, 4, 1, '#e3be7d');
-      rect(c, 5, -20, 4, 12, shadow);
-      const attack = e.state === 'strike';
-      if (e.kind === 'brute') {
-        line(c, 8, -13, attack ? 28 : 15, attack ? -12 : -31, '#8b8164', 3);
-        rect(c, attack ? 22 : 8, attack ? -18 : -36, 14, 9, '#8c9390');
-      } else {
-        line(c, 8, -12, attack ? 25 : 12, attack ? -17 : -4, '#a5ada0', 2);
-      }
-    }
-    c.restore();
+    drawEnemy(c, e, time);
     if (e.hp < e.maxHp) {
       rect(c, e.x - 5, e.y - 11, e.w + 10, 3, '#18272a');
       rect(c, e.x - 5, e.y - 11, (e.w + 10) * e.hp / e.maxHp, 2, '#a27762');
@@ -410,72 +319,9 @@ export class Renderer {
 
   drawBoss(e, time) {
     if (e.hp <= 0) return;
-    const c = this.ctx;
-    c.save(); c.translate(Math.round(e.x + e.w / 2), Math.round(e.y + e.h)); c.scale(e.facing * 2, 2);
-    const color = e.flash > 0 ? '#f5ead1' : e.color;
-    const pulse = Math.sin(time * 3) * 2;
-    if (e.kind === 'widow') {
-      for (let i = 0; i < 4; i++) {
-        const yy = -13 - i * 5, spread = 23 + i * 5;
-        for (const dir of [-1, 1]) {
-          line(c, dir * 9, yy, dir * spread, yy - 10 + Math.sin(time * 5 + i) * 3, color, 3);
-          line(c, dir * spread, yy - 10 + Math.sin(time * 5 + i) * 3, dir * (spread + 7), -1, '#637356', 2);
-        }
-      }
-      polygon(c, [[-15, -25], [-11, -42], [8, -43], [17, -22], [6, -7], [-8, -9]], '#455443');
-      rect(c, -6, -40, 12, 13, color);
-      polygon(c, [[-9, -41], [-1, -50], [9, -41], [12, -27], [-11, -27]], '#7b8b69');
-      rect(c, -3, -37, 8, 2, '#f3d899'); rect(c, -4, -28, 9, 11, '#b5bba0');
-      for (let i = 0; i < 5; i++) line(c, -10 + i * 5, -30, -20 + i * 10, -10, color);
-    } else if (e.kind === 'heart') {
-      for (let side = -1; side <= 1; side += 2) for (let i = 0; i < 4; i++) {
-        polygon(c, [[side * 10, -35 + i * 5], [side * (27 + i * 5), -55 + i * 8 + pulse], [side * (34 + i * 7), -21 + i * 8], [side * 22, -30 + i * 6]], '#855754');
-        line(c, side * 10, -35 + i * 5, side * (27 + i * 5), -55 + i * 8 + pulse, color, 2);
-      }
-      polygon(c, [[-15, -38], [-8, -50], [0, -44], [8, -50], [19, -37], [12, -18], [0, -8], [-12, -21]], color);
-      polygon(c, [[-10, -36], [-3, -42], [2, -33], [0, -18]], '#edd0b2');
-      line(c, 3, -37, 11, -29, '#623d42', 3);
-      rect(c, -7, -11, 4, 11, '#9b756c'); rect(c, 7, -13, 4, 13, '#9b756c');
-      glow(c, 0, -30, 42, color, 0.3);
-    } else {
-      const floating = e.kind === 'astronomer' || e.kind === 'cantor';
-      const y = floating ? -5 + pulse : 0;
-      c.translate(0, y);
-      polygon(c, [[-14, -36], [7, -37], [18, -5], [7, -9], [-2, -3], [-18, -6]], '#374647');
-      polygon(c, [[-12, -34], [-5, -30], [-8, -6], [-20, -2]], '#1c3034');
-      line(c, -12, -35, -17, -6, color, 2); line(c, 7, -35, 16, -5, color, 2);
-      rect(c, -7, -35, 12, 24, '#63716a'); rect(c, -6, -28, 11, 3, color); rect(c, -6, -20, 11, 2, color);
-      rect(c, -7, -8, 5, 8, '#18292e'); rect(c, 5, -8, 5, 8, '#18292e');
-      rect(c, -7, -47, 13, 13, color);
-      if (e.kind === 'warden') {
-        polygon(c, [[-11, -44], [-8, -53], [3, -58], [10, -44]], '#728076');
-        rect(c, -12, -44, 24, 3, '#9a9b80'); rect(c, -4, -41, 12, 3, '#1a2c30'); rect(c, 3, -41, 3, 2, '#efd090');
-        rect(c, 9, -35, 6, 19, '#758070');
-        const striking = e.state === 'strike';
-        line(c, 13, -18, striking ? 51 : 23, striking ? -22 : -51, '#a7976c', 3);
-        polygon(c, striking ? [[43, -31], [60, -24], [51, -14], [48, -22]] : [[16, -56], [34, -54], [31, -43], [24, -47]], '#b8bba2');
-        rect(c, -21, -24, 9, 14, '#ac9661'); rect(c, -19, -22, 5, 9, '#eaca87');
-        glow(c, -17, -17, 37, '#e0b469', 0.4);
-      } else if (e.kind === 'cantor') {
-        polygon(c, [[-9, -44], [-4, -61], [2, -55], [8, -63], [12, -44]], color);
-        rect(c, -5, -43, 13, 4, '#253a42'); rect(c, -1, -37, 7, 6, '#102630');
-        line(c, 17, -10, 17, -59, '#a0b6aa', 3);
-        for (let i = 0; i < 3; i++) rect(c, 11 + i * 5, -63 - i % 2 * 6, 2, 15, color);
-      } else {
-        polygon(c, [[-11, -44], [-1, -63], [7, -51], [13, -44]], '#665e78');
-        rect(c, -6, -42, 14, 4, '#d2c2c1');
-        for (let i = 0; i < 4; i++) {
-          const angle = time * 0.9 + i * Math.PI / 2;
-          rect(c, Math.cos(angle) * 27, -37 + Math.sin(angle) * 20, 4, 4, '#d4c1e3');
-        }
-        line(c, 14, -18, 20, -51, color, 2);
-        glow(c, 22, -53, 20, '#c3afd3', 0.5);
-        rect(c, 19, -56, 7, 7, '#e2cedf');
-      }
-    }
-    c.restore();
+    drawBoss(this.ctx, e, time);
     this.telegraph(e, time);
-    if (e.phase === 2) glow(c, e.x + e.w / 2, e.y + e.h / 2, 100, e.color, 0.13);
+    if (e.phase === 2) glow(this.ctx, e.x + e.w / 2, e.y + e.h / 2, 100, e.color, 0.13);
   }
 
   telegraph(e, time) {
@@ -487,7 +333,7 @@ export class Renderer {
       }
     } else if (e.state === 'windup') {
       const progress = 1 - e.timer / e.windupDuration;
-      const color = ['leap', 'meteor', 'nova'].includes(e.pattern) ? '#b19bcc' : '#dfaa73';
+      const color = ['leap', 'meteor', 'nova', 'roots', 'tidal', 'eclipse', 'rapture'].includes(e.pattern) ? '#b19bcc' : '#dfaa73';
       const cx = e.x + e.w / 2;
       glow(c, cx, e.y + e.h / 2, 55, color, progress * 0.4);
       polygon(c, [[cx, e.y - 26], [cx + 5, e.y - 19], [cx, e.y - 12], [cx - 5, e.y - 19]], color);
@@ -529,7 +375,7 @@ export class Renderer {
       c.save(); c.globalAlpha = 0.35;
       for (let i = 0; i < 14; i++) rect(c, gateX + i * 4, 315 + Math.sin(game.time + i) * 10, 2, 130, p.light);
       c.restore();
-      if (game.save.chapter === 4) this.drawHunter({ x: gateX + 17, y: 404, facing: -1, grounded: true, vx: 0 }, game.time);
+      if (game.save.chapter === 4) drawNPC(c, { ...NPCS[4], x: gateX + 23, y: 452 }, game.time, 1, -1);
     } else {
       for (let i = 0; i < 7; i++) rect(c, gateX + i * 9, 313, 3, 139, '#758170');
       rect(c, gateX - 3, 353, 64, 4, '#778373'); rect(c, gateX - 3, 409, 64, 4, '#778373');
@@ -539,6 +385,17 @@ export class Renderer {
       for (let i = 0; i < 15; i++) {
         c.save(); c.globalAlpha = 0.15 + Math.sin(game.time * 3 + i) * 0.09;
         rect(c, x + i % 3 * 3, 160 + i * 19, 14, 37, '#d5b890'); c.restore();
+      }
+    }
+    const npc = game.npc;
+    if (npc.x - camera > -100 && npc.x - camera < WIDTH + 100) {
+      drawNPC(c, { ...npc, x: npc.x - camera }, game.time, 1, game.player.x < npc.x ? -1 : 1);
+      glow(c, npc.x - camera, npc.y - 27, 52, npc.color, 0.1);
+      c.textAlign = 'center'; c.font = '9px Georgia'; c.fillStyle = '#d9d4b5';
+      c.fillText(npc.name, npc.x - camera, npc.y - 88);
+      if (!game.save.talked.includes(game.save.chapter)) {
+        const y = npc.y - 103 + Math.sin(game.time * 2) * 2;
+        polygon(c, [[npc.x - camera, y - 4], [npc.x - camera + 3, y], [npc.x - camera, y + 4], [npc.x - camera - 3, y]], npc.color);
       }
     }
   }
@@ -571,9 +428,19 @@ export class Renderer {
   }
 
   render(game, time) {
+    if (game.cinematic?.kind === 'prologue') { this.prologue(game.cinematic, time); return; }
     const menu = game.mode === 'menu';
     const c = this.ctx;
+    rect(c, 0, 0, WIDTH, HEIGHT, '#08151e');
     c.save();
+    if (game.cinematic && !menu) {
+      const shot = game.cinematic, progress = Math.min(1, shot.elapsed / shot.duration);
+      const zoom = this.settings.reducedMotion ? 1.35 : shot.kind === 'mutation' ? 1.35 + Math.sin(progress * Math.PI) * 0.22 : 1.1 + progress * 0.38;
+      const focusX = game.boss.x + game.boss.w / 2 - game.camera, focusY = 452 - game.boss.h * 0.6;
+      c.translate(WIDTH * 0.53, HEIGHT * 0.51); c.scale(zoom, zoom); c.translate(-focusX, -focusY);
+    } else if (game.dialogue) {
+      c.translate(WIDTH * 0.5, HEIGHT * 0.4); c.scale(1.3, 1.3); c.translate(-WIDTH * 0.5, -(game.npc.y - 43));
+    }
     if (this.settings.shake && !this.settings.reducedMotion && game.shake > 0 && !menu) c.translate(Math.round(Math.sin(time * 91) * game.shake * 0.5), Math.round(Math.cos(time * 113) * game.shake * 0.3));
     if (menu) {
       this.background(0, 0, time, true);
@@ -596,23 +463,31 @@ export class Renderer {
       for (const z of game.zones) {
         c.save(); c.globalAlpha = z.fired ? z.life * 2 : 0.4;
         rect(c, z.x - z.radius, z.y - 3, z.radius * 2, 3, '#dfb4e8');
-        if (z.fired) {
-          polygon(c, [[z.x - 36, z.y], [z.x - 7, z.y - 300], [z.x + 9, z.y - 270], [z.x + 35, z.y]], '#d9b9e5');
+        if (z.fired && z.kind === 'roots') {
+          for (let i = 0; i < 4; i++) shape(c, [[z.x - 27 + i * 15, z.y], [z.x - 34 + i * 16, z.y - 83 - i % 2 * 25], [z.x - 16 + i * 15, z.y]], '#9faf7e', '#d7d2a7');
+        } else if (z.fired) {
+          polygon(c, [[z.x - 36, z.y], [z.x - 7, z.y - 170], [z.x + 9, z.y - 150], [z.x + 35, z.y]], '#d9b9e5');
         } else { line(c, z.x, z.y - 210, z.x, z.y, '#a991b8'); glow(c, z.x, z.y, z.radius, '#b79ac7', 0.4); }
         c.restore();
       }
       for (const e of game.enemies) if (Math.abs(e.x - game.player.x) < WIDTH) this.drawEnemy(e, time);
       this.drawBoss(game.boss, time);
-      for (const a of game.afterimages) this.drawHunter({ ...game.player, ...a, dash: 0.1 }, time, a.life * 1.4);
+      for (const a of game.afterimages) this.drawHunter({ ...game.player, ...a, dash: 0.1 }, time, a.life * 1.25);
+      for (const ring of game.rings) {
+        c.save(); c.globalAlpha = Math.min(0.55, ring.life);
+        c.strokeStyle = ring.color; c.lineWidth = 2;
+        c.beginPath(); c.ellipse(ring.x, ring.y, ring.radius, ring.radius * 0.45, 0, 0, Math.PI * 2); c.stroke(); c.restore();
+      }
       if (game.mode !== 'dead') {
         if (game.mode === 'dying') {
           c.save(); c.globalAlpha = game.deathTimer / 1.5; this.drawHunter(game.player, time); c.restore();
         } else this.drawHunter(game.player, time);
       }
       for (const bolt of game.projectiles) {
-        glow(c, bolt.x, bolt.y, 24, '#bbccbf', 0.5);
-        if (bolt.wave) polygon(c, [[bolt.x, bolt.y + 18], [bolt.x + 10, bolt.y - 17], [bolt.x + 18, bolt.y], [bolt.x + 27, bolt.y + 18]], '#b2c7b7');
-        else { rect(c, bolt.x - 2, bolt.y - 2, 11, 11, '#567b7e'); rect(c, bolt.x, bolt.y, 7, 7, '#e1dbc1'); }
+        const color = bolt.color || '#bbccbf';
+        glow(c, bolt.x, bolt.y, 24, color, 0.45);
+        if (bolt.wave) polygon(c, [[bolt.x, bolt.y + 18], [bolt.x + 10, bolt.y - 17], [bolt.x + 18, bolt.y], [bolt.x + 27, bolt.y + 18]], color);
+        else { line(c, bolt.x + 4, bolt.y + 4, bolt.x - bolt.vx * 0.07, bolt.y - bolt.vy * 0.07, color, 2); shape(c, [[bolt.x + 5, bolt.y - 3], [bolt.x + 12, bolt.y + 5], [bolt.x + 5, bolt.y + 12], [bolt.x - 2, bolt.y + 5]], color); rect(c, bolt.x + 3, bolt.y + 3, 4, 4, '#f5eed2'); }
       }
       for (const p of game.particles) { c.save(); c.globalAlpha = Math.min(1, p.life * 2); rect(c, p.x, p.y, p.size, p.size, p.color); c.restore(); }
       c.textAlign = 'center'; c.font = '12px Georgia';
@@ -630,5 +505,57 @@ export class Renderer {
       }
     }
     c.restore();
+    if (game.cinematic?.kind === 'mutation') {
+      const phase = game.cinematic.elapsed / game.cinematic.duration;
+      const intensity = phase < 0.44 ? phase * 0.6 : (1 - phase) * 0.4;
+      if (!this.settings.reducedMotion) {
+        glow(c, WIDTH * 0.53, HEIGHT * 0.51, 380, game.boss.drama.color, intensity);
+        c.save(); c.globalAlpha = intensity * 0.8;
+        for (let i = 0; i < 17; i++) {
+          const a = i * Math.PI * 2 / 17 + phase * 0.25;
+          line(c, WIDTH * 0.53 + Math.cos(a) * 85, HEIGHT * 0.5 + Math.sin(a) * 85, WIDTH * 0.53 + Math.cos(a) * 500, HEIGHT * 0.5 + Math.sin(a) * 500, game.boss.drama.color, 1 + i % 3);
+        }
+        c.restore();
+      }
+    }
+  }
+
+  prologue(shot, time) {
+    const c = this.ctx, plate = PROLOGUE[shot.index];
+    const t = this.settings.reducedMotion ? 8 : time;
+    const progress = shot.elapsed / shot.duration;
+    this.background(plate.chapter, 0, t, true);
+    c.save();
+    const zoom = this.settings.reducedMotion ? 1 : 1 + progress * 0.06;
+    c.translate(480, 270); c.scale(zoom, zoom); c.translate(-480, -270);
+    if (['bell', 'fracture'].includes(plate.scene)) {
+      for (const x of [575, 745]) { limb(c, [x, 0], [x, 168], 6, 5, '#323e41', '#8b8870'); for (let y = 5; y < 165; y += 13) oval(c, x, y, 7, 9, '#283b3d', '#a59879'); }
+      shape(c, [[559, 331], [581, 290], [587, 219], [609, 179], [650, 163], [693, 179], [716, 224], [721, 292], [747, 331]], '#687366', '#c6b180', 3);
+      for (let i = 0; i < 7; i++) line(c, 596 + i * 17, 220, 579 + i * 24, 320, '#9c9c77', 2);
+      oval(c, 651, 330, 96, 17, '#293c3c', '#d0b47d');
+      line(c, 650, 288, 650 + Math.sin(t * 0.7) * 16, 354, '#c0a776', 7);
+      if (plate.scene === 'fracture') {
+        shape(c, [[660, 166], [640, 223], [664, 246], [641, 291], [659, 331], [668, 330], [652, 293], [677, 246], [652, 221], [673, 167]], '#dfc5ad', null);
+        glow(c, 655, 253, 180, '#d3b1d0', 0.22 + progress * 0.2);
+      }
+    } else if (plate.scene === 'siblings') {
+      rect(c, 520, 377, 360, 10, '#8b9179');
+      for (const x of [556, 817]) { rect(c, x, 49, 10, 330, '#405755'); rect(c, x + 2, 49, 2, 330, '#adb498'); }
+      shape(c, [[550, 49], [685, -25], [832, 49], [832, 66], [685, -8], [550, 66]], '#778679');
+      c.save(); c.translate(566, 314); c.scale(1.35, 1.35); drawHunter(c, { x: 0, y: 0, facing: 1, grounded: true, vx: 0 }, t); c.restore();
+      drawNPC(c, { ...NPCS[4], x: 740, y: 375 }, t, 1.45, -1);
+      glow(c, 700, 310, 150, '#dec08a', 0.2);
+    } else if (plate.scene === 'hunter') {
+      c.save(); c.translate(632, 246); c.scale(1.85, 1.85); drawHunter(c, { x: 0, y: 0, facing: 1, grounded: true, vx: 0 }, t); c.restore();
+      drawNPC(c, { ...NPCS[0], x: 795, y: 348 }, t, 1.2, -1);
+      line(c, 510, 348, 910, 348, '#c0b68b', 3);
+    } else {
+      for (let i = 0; i < 19; i++) glow(c, 475 + i * 24, 332 + Math.sin(i * 2.4) * 67, 16, '#e4be7c', 0.18);
+    }
+    c.restore();
+    c.fillStyle = '#05131b88'; c.fillRect(0, 0, 435, HEIGHT);
+    const fade = this.settings.reducedMotion ? 0 : Math.max(0, 1 - shot.elapsed * 1.8);
+    if (fade > 0) { c.save(); c.globalAlpha = fade; rect(c, 0, 0, WIDTH, HEIGHT, '#07121c'); c.restore(); }
+    this.atmosphere(plate.chapter, t, 0);
   }
 }

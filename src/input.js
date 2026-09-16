@@ -1,4 +1,4 @@
-const KEYS = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'jump', KeyW: 'jump', ArrowUp: 'jump', KeyJ: 'attack', KeyK: 'heavy', ShiftLeft: 'dash', ShiftRight: 'dash', KeyL: 'parry', KeyQ: 'parry', KeyF: 'heal', KeyE: 'interact', Escape: 'pause', KeyP: 'pause' };
+const KEYS = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', Space: 'jump', KeyW: 'up', ArrowUp: 'up', KeyS: 'down', ArrowDown: 'down', KeyJ: 'attack', KeyK: 'heavy', ShiftLeft: 'dash', ShiftRight: 'dash', KeyL: 'parry', KeyQ: 'parry', KeyF: 'heal', KeyE: 'interact', Escape: 'pause', KeyP: 'pause' };
 const PAD = { 0: 'jump', 1: 'dash', 2: 'attack', 3: 'heavy', 4: 'parry', 5: 'heal', 9: 'pause', 12: 'interact', 14: 'left', 15: 'right' };
 const MENU_PAD = { 0: 'uiConfirm', 1: 'uiBack', 9: 'pause', 12: 'uiPrevious', 13: 'uiNext', 14: 'uiPrevious', 15: 'uiNext' };
 
@@ -70,6 +70,8 @@ export class Input {
       if (this.active) {
         if (physical.has('pad-left')) next.set('pad-left', 'left');
         if (physical.has('pad-right')) next.set('pad-right', 'right');
+        if (physical.has('pad-up')) next.set('pad-up', 'up');
+        if (physical.has('pad-down')) next.set('pad-down', 'down');
       } else {
         if (physical.has('pad-up')) next.set('pad-up', 'uiPrevious');
         if (physical.has('pad-down')) next.set('pad-down', 'uiNext');

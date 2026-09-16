@@ -34,19 +34,73 @@ try {
 
   await page.getByRole('button', { name: /How to play/ }).click();
   await expect(page.getByRole('heading', { name: 'Learn the hunt.' })).toBeVisible();
-  assert.equal(await page.locator('.controls-table tbody tr').count(), 9);
+  assert.equal(await page.locator('.controls-table tbody tr').count(), 10);
   await page.keyboard.press('Escape');
   await expect(page.locator('#modal-layer')).toBeHidden();
   await page.locator('[data-chapter="3"]').click();
   await expect(page.locator('#toast')).toContainText('Defeat');
 
   await page.locator('#begin-button').click();
+  await expect(page.locator('#cinematic-overlay')).toBeVisible();
+  await expect(page.locator('#cinematic-title')).toHaveText('Before the long night');
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: path.join(output, '04-prologue.png'), fullPage: true });
+  await page.locator('#cinematic-next').click();
+  await expect(page.locator('#cinematic-title')).toHaveText('A beautiful mistake');
+  await page.locator('#cinematic-next').click();
+  await page.waitForTimeout(900);
+  await page.screenshot({ path: path.join(output, '05-mara-prologue.png'), fullPage: true });
+  await page.locator('#cinematic-next').click();
+  await expect(page.locator('#cinematic-title')).toHaveText('The hundredth bell');
+  await page.waitForTimeout(650);
+  await page.screenshot({ path: path.join(output, '06-hundredth-bell.png'), fullPage: true });
+  await page.locator('#cinematic-next').click();
+  await expect(page.locator('#cinematic-title')).toHaveText('Carry a little morning');
+  await page.locator('#cinematic-next').click();
   await expect(page.getByRole('heading', { name: 'The Gaslit Ward', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Carry the light' }).click();
   await expect(page.locator('#hud')).toBeVisible();
   const dev = await page.evaluate(() => !!window.__VESPER__);
   if (dev) {
     assert.equal(await page.evaluate(() => window.__VESPER__.audio.context.state), 'running');
+    const visualMetrics = await page.evaluate(() => {
+      const { renderer } = window.__VESPER__, original = { ...renderer.settings };
+      renderer.settings.particles = false;
+      const compare = (a, b) => {
+        let changed = 0;
+        for (let i = 0; i < a.length; i += 4) if (a[i] !== b[i] || a[i + 1] !== b[i + 1] || a[i + 2] !== b[i + 2]) changed++;
+        return changed;
+      };
+      const frame = (chapter, time) => { renderer.background(chapter, 0, time); return renderer.ctx.getImageData(0, 0, 960, 540).data; };
+      const animated = [0, 1, 2, 3, 4].map(i => compare(frame(i, 10), frame(i, 14)));
+      renderer.settings.reducedMotion = true;
+      const reduced = compare(frame(3, 10), frame(3, 14));
+      Object.assign(renderer.settings, original);
+      return { animated, reduced };
+    });
+    assert.ok(visualMetrics.animated.every(n => n > 1000), `World animation is too static: ${JSON.stringify(visualMetrics)}`);
+    assert.equal(visualMetrics.reduced, 0, 'Reduced-motion mode should freeze background animation');
+
+    const instrumentMetrics = await page.evaluate(async () => {
+      const Audio = window.__VESPER__.audio.constructor;
+      const metrics = [];
+      for (const instrument of ['felt', 'harp', 'choir', 'glass', 'strings']) {
+        const engine = new Audio({ sound: true, music: 1, effects: 1 }, message => { throw new Error(message); });
+        const c = new OfflineAudioContext(1, 44100 * 2, 44100);
+        engine.context = c; engine.score = c.createGain(); engine.score.connect(c.destination);
+        engine.noiseBuffer = c.createBuffer(1, 44100, 44100);
+        const noise = engine.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noise.length; i++) noise[i] = Math.sin(i * 31.37) * 0.5;
+        engine.instrument(instrument, 62, 0.05, 1.6, 0.12);
+        const data = (await c.startRendering()).getChannelData(0);
+        let squares = 0, crossings = 0, peak = 0;
+        for (let i = 1; i < data.length; i++) { squares += data[i] * data[i]; peak = Math.max(peak, Math.abs(data[i])); if (data[i] >= 0 && data[i - 1] < 0) crossings++; }
+        metrics.push({ instrument, rms: Math.sqrt(squares / data.length), crossings, peak });
+      }
+      return metrics;
+    });
+    assert.ok(instrumentMetrics.every(m => m.rms > 0.005 && m.peak < 1), `Silent or clipped instruments: ${JSON.stringify(instrumentMetrics)}`);
+    assert.equal(new Set(instrumentMetrics.map(m => `${m.rms.toFixed(4)}:${m.crossings}`)).size, 5);
     const startX = await page.evaluate(() => window.__VESPER__.game.player.x);
     await page.keyboard.down('d');
     await page.waitForTimeout(400);
@@ -107,6 +161,37 @@ try {
     });
     assert.equal(await page.evaluate(() => window.__VESPER__.game.save.echoes), 77);
 
+    await page.evaluate(() => {
+      const g = window.__VESPER__.game;
+      g.player.x = 220; g.player.y = 404; g.player.vx = 0; g.player.vy = 0; g.player.grounded = true;
+      g.player.stamina = 100; g.player.dashCooldown = 0; g.player.invulnerable = 100;
+    });
+    await page.keyboard.down('d');
+    await page.keyboard.down('Shift');
+    await page.waitForTimeout(40);
+    await page.keyboard.press('j');
+    await page.waitForTimeout(80);
+    assert.equal(await page.evaluate(() => window.__VESPER__.game.player.attackKind), 'wakecut');
+    await page.screenshot({ path: path.join(output, '07-wakecut.png'), fullPage: true });
+    await page.keyboard.up('Shift'); await page.keyboard.up('d');
+    await page.waitForTimeout(450);
+    await page.evaluate(() => { const p = window.__VESPER__.game.player; p.x = 220; p.y = 404; p.vx = 0; p.vy = 0; p.grounded = true; p.stamina = 100; p.attack = 0; p.airDash = true; });
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(150);
+    await page.keyboard.down('w');
+    await page.keyboard.down('Shift');
+    await page.waitForTimeout(75);
+    assert.equal(await page.evaluate(() => window.__VESPER__.game.player.dashY), -1);
+    await page.screenshot({ path: path.join(output, '08-air-step.png'), fullPage: true });
+    await page.keyboard.up('Shift'); await page.keyboard.up('w'); await page.keyboard.up('Space');
+    await page.waitForTimeout(190);
+    await page.keyboard.press('k');
+    await page.waitForTimeout(75);
+    assert.equal(await page.evaluate(() => window.__VESPER__.game.player.plunge), true);
+    await page.screenshot({ path: path.join(output, '09-bellfall.png'), fullPage: true });
+    await page.waitForFunction(() => window.__VESPER__.game.player.grounded);
+    await page.screenshot({ path: path.join(output, '10-bellfall-impact.png'), fullPage: true });
+
     for (let chapter = 0; chapter < 5; chapter++) {
       if (chapter > 0) {
         await expect(page.getByRole('button', { name: 'Carry the light' })).toBeVisible();
@@ -114,11 +199,63 @@ try {
       }
       await page.evaluate(() => {
         const g = window.__VESPER__.game;
+        g.player.x = g.npc.x - 35; g.player.y = g.npc.y - g.player.h; g.player.vx = 0; g.player.vy = 0; g.player.grounded = true; g.player.invulnerable = 100;
+        g.camera = 0;
+      });
+      const survivorPixels = await page.evaluate(() => {
+        const { game: g, renderer: r } = window.__VESPER__, x = g.npc.x;
+        const frame = () => { r.render(g, 12); return r.ctx.getImageData(x - g.camera - 20, g.npc.y - 80, 40, 80).data; };
+        const visible = frame();
+        g.npc.x = -1000;
+        const absent = frame();
+        g.npc.x = x;
+        r.render(g, 12);
+        let changed = 0;
+        for (let i = 0; i < visible.length; i += 4) if (visible[i] !== absent[i] || visible[i + 1] !== absent[i + 1] || visible[i + 2] !== absent[i + 2]) changed++;
+        return changed;
+      });
+      assert.ok(survivorPixels > 250, `Chapter ${chapter + 1}: survivor sprite missing before the boss (${survivorPixels} pixels)`);
+      await page.keyboard.press('e');
+      await expect(page.locator('#dialogue-overlay')).toBeVisible();
+      await page.waitForTimeout(150);
+      await page.screenshot({ path: path.join(output, `survivor-${chapter + 1}.png`), fullPage: true });
+      if (chapter === 0) {
+        await page.locator('.masthead [data-open="controls"]').click();
+        await page.getByRole('button', { name: 'Accessibility & difficulty' }).click();
+        await page.getByRole('button', { name: 'Keep these settings' }).click();
+        assert.equal(await page.evaluate(() => window.__VESPER__.audio.paused), true, 'Closing settings must preserve conversation music ducking');
+      }
+      for (let i = 0; i < 3; i++) await page.locator('[data-dialogue-next]').click();
+      await expect(page.locator('[data-dialogue-choice="0"]')).toBeVisible();
+      await page.locator('[data-dialogue-choice="0"]').click();
+      for (let i = 0; i < 2; i++) await page.locator('[data-dialogue-next]').click();
+      await page.locator('[data-dialogue-leave]').click();
+      assert.equal(await page.evaluate(() => window.__VESPER__.game.save.talked.includes(window.__VESPER__.game.save.chapter)), true);
+      await page.evaluate(() => {
+        const g = window.__VESPER__.game;
         g.player.x = g.level.arena - 30; g.player.y = 404; g.player.vx = 0; g.player.vy = 0; g.player.invulnerable = 100;
       });
+      await expect(page.locator('#cinematic-overlay')).toHaveClass(/boss-scene/);
+      await page.waitForTimeout(1100);
+      await page.screenshot({ path: path.join(output, `guardian-intro-${chapter + 1}.png`), fullPage: true });
+      await page.locator('#cinematic-next').click();
       await expect(page.locator('#boss-hud')).toBeVisible();
       await page.waitForTimeout(350);
       await page.screenshot({ path: path.join(output, `chapter-${chapter + 1}.png`), fullPage: true });
+      await page.evaluate(() => {
+        const g = window.__VESPER__.game;
+        g.boss.hp = g.boss.maxHp * 0.5 + 1; g.boss.state = 'recover'; g.boss.timer = 20; g.boss.vx = 0;
+        g.player.x = g.boss.x - 38; g.player.y = 404; g.player.facing = 1;
+        g.player.stamina = 100; g.player.attack = 0; g.player.hurt = 0;
+      });
+      await page.keyboard.press('j');
+      await expect(page.locator('#cinematic-overlay')).toHaveClass(/mutation-scene/);
+      await page.waitForFunction(() => window.__VESPER__.game.boss.phase === 2);
+      await page.screenshot({ path: path.join(output, `guardian-mutation-${chapter + 1}.png`), fullPage: true });
+      const mutatedName = await page.evaluate(() => window.__VESPER__.game.boss.drama.mutation);
+      await expect(page.locator('#cinematic-title')).toHaveText(mutatedName);
+      await page.locator('#cinematic-next').click();
+      await expect(page.locator('#boss-name')).toHaveText(mutatedName);
       await page.evaluate(() => {
         const g = window.__VESPER__.game;
         g.boss.hp = 1; g.boss.state = 'recover'; g.boss.timer = 20; g.boss.vx = 0;
@@ -169,6 +306,8 @@ try {
     await padPage.waitForTimeout(90);
   };
   await pressPad(0);
+  await expect(padPage.locator('#cinematic-overlay')).toBeVisible();
+  await pressPad(1);
   await expect(padPage.getByRole('button', { name: 'Carry the light' })).toBeVisible();
   await pressPad(0);
   await expect(padPage.locator('#modal-layer')).toBeHidden();
@@ -176,6 +315,15 @@ try {
   await expect(padPage.getByRole('heading', { name: 'A moment of silence.' })).toBeVisible();
   await pressPad(1);
   await expect(padPage.locator('#modal-layer')).toBeHidden();
+  if (dev) {
+    await padPage.evaluate(() => { const g = window.__VESPER__.game; g.player.x = g.level.arena - 30; });
+    await expect(padPage.locator('#cinematic-overlay')).toBeVisible();
+    await padPage.locator('.masthead [data-open="chapters"]').click();
+    await padPage.locator('[data-travel="0"]').click();
+    await expect(padPage.getByRole('button', { name: 'Carry the light' })).toBeVisible();
+    assert.equal(await padPage.evaluate(() => window.__VESPER__.game.cinematic), null);
+    assert.equal(await padPage.evaluate(() => window.__VESPER__.audio.cinematic), false, 'Travel must release cinematic music ducking');
+  }
   await padContext.close();
 
   const corruptContext = await browser.newContext();
@@ -187,6 +335,21 @@ try {
   assert.equal(await corruptPage.evaluate(() => localStorage.getItem('vesper.save.v1')), '{broken-save');
   await corruptContext.close();
 
+  const legacyContext = await browser.newContext();
+  await legacyContext.addInitScript(() => localStorage.setItem('vesper.save.v1', JSON.stringify({ version: 1, chapter: 3, unlocked: 3, checkpoint: 1, echoes: 321, vitality: 2, blade: 3, defeated: [0, 1, 2], notes: [1], deaths: 8, bloodstain: null, ending: null, started: true, playtime: 913 })));
+  const legacyPage = await legacyContext.newPage();
+  watch(legacyPage);
+  await legacyPage.goto(baseURL, { waitUntil: 'networkidle' });
+  await legacyPage.locator('#begin-button').click();
+  await expect(legacyPage.locator('#cinematic-overlay')).toBeVisible();
+  await legacyPage.locator('#cinematic-skip').click();
+  await expect(legacyPage.getByRole('heading', { name: 'The Astral Spire', exact: true })).toBeVisible();
+  await legacyPage.getByRole('button', { name: 'Carry the light' }).click();
+  await expect(legacyPage.locator('#health-value')).toHaveText('140 / 140');
+  const restored = await legacyPage.evaluate(() => JSON.parse(localStorage.getItem('vesper.save.v1')));
+  assert.equal(restored.blade, 3); assert.equal(restored.echoes, 321); assert.deepEqual(restored.defeated, [0, 1, 2]); assert.equal(restored.prologueSeen, true);
+  await legacyContext.close();
+
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const phone = await mobile.newPage();
   watch(phone);
@@ -196,6 +359,9 @@ try {
   await phone.screenshot({ path: path.join(output, '02-title-mobile.png'), fullPage: true });
   assert.ok(await phone.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Mobile layout overflows viewport');
   await phone.locator('#begin-button').tap();
+  await expect(phone.locator('#cinematic-overlay')).toBeVisible();
+  await phone.screenshot({ path: path.join(output, '11-prologue-mobile.png'), fullPage: true });
+  await phone.locator('#cinematic-skip').tap();
   await phone.getByRole('button', { name: 'Carry the light' }).tap();
   await expect(phone.locator('#touch-controls')).toBeVisible();
   await phone.locator('[data-action="jump"]').tap();

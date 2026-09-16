@@ -1,4 +1,5 @@
-import { CHAPTERS, CONTROLS, ENDINGS, ROMAN } from './content.js';
+import { CHAPTERS, CONTROLS, ENDINGS, ROMAN, PROLOGUE, NPCS } from './content.js';
+import { drawPortrait } from './actors.js';
 import { Game } from './game.js';
 import { Input } from './input.js';
 import { Renderer } from './renderer.js';
@@ -10,6 +11,8 @@ const canvas = $('#game');
 const frame = $('#game-frame');
 const modalLayer = $('#modal-layer');
 const modal = $('#modal');
+const cinematicOverlay = $('#cinematic-overlay');
+const dialogueOverlay = $('#dialogue-overlay');
 const startupWarnings = [];
 let persistenceEnabled = true;
 let settingsWereSaved = false;
@@ -56,8 +59,16 @@ function saveSettings() {
 
 function updatePresentation() {
   const menu = game.mode === 'menu' || modalState?.returnMode === 'menu';
+  const cinematic = !!game.cinematic && game.cinematic.kind !== 'prologue';
+  const paused = !!modalState || game.mode === 'dialogue';
+  if (audio.cinematic !== cinematic) audio.setCinematic(cinematic);
+  if (audio.paused !== paused) audio.setPaused(paused);
   $('#home-screen').hidden = !menu;
-  $('#hud').hidden = menu;
+  $('#hud').hidden = menu || !!game.cinematic;
+  cinematicOverlay.hidden = !game.cinematic;
+  dialogueOverlay.hidden = !game.dialogue;
+  frame.classList.toggle('in-cinematic', !!game.cinematic);
+  frame.classList.toggle('in-dialogue', !!game.dialogue);
   frame.classList.toggle('playing', !menu);
   $('#begin-label').textContent = game.save.started ? 'Continue the pilgrimage' : 'Begin the pilgrimage';
   $('#new-button').hidden = !game.save.started;
@@ -85,12 +96,11 @@ function showModal(html, { dismiss = true, wide = false, kind = 'generic', onClo
   const returnMode = modalState?.returnMode ?? (['rest', 'lore'].includes(game.mode) ? 'playing' : game.mode);
   if (!modalState) previousFocus = document.activeElement;
   modalState = { returnMode, dismiss, kind, onClose: onClose ?? modalState?.onClose ?? null };
-  if (game.mode === 'playing') game.mode = 'paused';
+  if (['playing', 'cinematic', 'dialogue'].includes(game.mode)) game.mode = 'paused';
   input.clear();
   modal.innerHTML = `${dismiss ? '<button class="modal-close" data-modal-action="close" aria-label="Close dialog">×</button>' : ''}${html}`;
   modal.classList.toggle('wide', wide);
   modalLayer.hidden = false;
-  audio.setPaused(true);
   updatePresentation();
   requestAnimationFrame(() => {
     const target = modal.querySelector('button:not(.modal-close):not(:disabled), input, select') || modal.querySelector('button');
@@ -105,7 +115,6 @@ function closeModal(restore = true) {
   modalLayer.hidden = true;
   if (restore) game.mode = state.returnMode;
   input.clear();
-  audio.setPaused(false);
   updatePresentation();
   if (game.mode === 'playing') canvas.focus({ preventScroll: true });
   else if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
@@ -134,6 +143,19 @@ function gameEvent(event) {
   if (event.type === 'save') { saveProgress(); updatePresentation(); }
   else if (event.type === 'sound') audio.play(event.name);
   else if (event.type === 'hint') toast(event.text);
+  else if (event.type === 'cinematic') showCinematic();
+  else if (event.type === 'cinematic-end') {
+    input.clear(); updatePresentation();
+    audio.theme(game.mode === 'menu' ? 0 : game.save.chapter, game.mode !== 'menu' && game.boss.active, game.mode === 'menu' ? 1 : game.boss.phase);
+    if (game.mode === 'playing') canvas.focus({ preventScroll: true });
+    else $('#begin-button').focus({ preventScroll: true });
+  } else if (event.type === 'mutation') {
+    $('#cinematic-title').textContent = event.boss.drama.mutation;
+    audio.play('mutation-reveal');
+  } else if (event.type === 'dialogue') showDialogue();
+  else if (event.type === 'dialogue-end') {
+    input.clear(); updatePresentation(); canvas.focus({ preventScroll: true });
+  }
   else if (event.type === 'chapter') {
     audio.theme(event.index);
     pendingVictory = null;
@@ -144,8 +166,8 @@ function gameEvent(event) {
       showModal(`<p class="modal-eyebrow">CHAPTER ${ROMAN[event.index]} · ${CHAPTERS[event.index].motif.toUpperCase()}</p><h2 id="modal-title">${CHAPTERS[event.index].name}</h2><p class="prose">${CHAPTERS[event.index].intro}</p>${event.index === 0 ? '<div class="modal-rule"></div><p class="prose small">Move with <b>A / D</b>. Jump with <b>Space</b>. Strike with <b>J</b>, dodge with <b>Shift</b>, and heal with <b>F</b>. Rest at lamps with <b>E</b> to save your checkpoint and strengthen your hunter.<br>Touch controls and controllers are also supported.</p>' : ''}<div class="modal-actions"><button class="primary-button" data-modal-action="close"><span>Carry the light</span><span>→</span></button><button class="text-button" data-modal-action="controls">Learn the hunt</button></div>`, { onClose: () => announce(event.index) });
     } else announce(event.index);
   } else if (event.type === 'boss') {
-    audio.theme(game.save.chapter, true);
-    toast(`${event.boss.name} — ${event.boss.epithet}`, 5000);
+    audio.theme(game.save.chapter, true, event.boss.phase);
+    updatePresentation();
   } else if (event.type === 'victory') {
     audio.theme(game.save.chapter, false);
     pendingVictory = { text: event.text, name: event.boss.name, time: 5.1 };
@@ -156,6 +178,46 @@ function gameEvent(event) {
   else if (event.type === 'respawn') { audio.theme(game.save.chapter); updatePresentation(); canvas.focus({ preventScroll: true }); }
   else if (event.type === 'ending-choice') showEndingChoice();
   else if (event.type === 'ending') showEnding(event.ending);
+}
+
+function showCinematic() {
+  const shot = game.cinematic;
+  clearTimeout(announcementTimer); $('#chapter-announcement').hidden = true;
+  clearTimeout(toastTimer); $('#toast').hidden = true;
+  input.clear();
+  cinematicOverlay.className = `cinematic-overlay ${shot.kind === 'prologue' ? 'prologue-scene' : 'boss-scene'} ${shot.kind === 'mutation' ? 'mutation-scene' : ''}`;
+  if (shot.kind === 'prologue') {
+    const plate = PROLOGUE[shot.index];
+    $('#cinematic-label').textContent = plate.label;
+    $('#cinematic-title').textContent = plate.title;
+    $('#cinematic-speaker').textContent = plate.speaker;
+    $('#cinematic-text').textContent = plate.text;
+    $('#cinematic-top-label').textContent = 'VESPER / THE HOLLOW BELL';
+    $('#cinematic-counter').textContent = `${String(shot.index + 1).padStart(2, '0')} / 05`;
+    $('#cinematic-next').textContent = shot.index === PROLOGUE.length - 1 ? 'Carry the light →' : 'Next memory →';
+    $('#cinematic-skip').textContent = shot.replay ? 'Return to title →' : 'Skip prologue →';
+    audio.theme(plate.chapter);
+  } else {
+    const b = game.boss, mutation = shot.kind === 'mutation';
+    $('#cinematic-label').textContent = mutation ? 'THE SECOND AWAKENING' : `GUARDIAN ${ROMAN[game.save.chapter]}`;
+    $('#cinematic-title').textContent = mutation ? b.drama.mutation : b.name;
+    $('#cinematic-speaker').textContent = mutation ? 'THE OATH IS BROKEN' : b.drama.reveal;
+    $('#cinematic-text').textContent = mutation ? b.drama.mutationLine : `“${b.drama.line}”`;
+    $('#cinematic-top-label').textContent = CHAPTERS[game.save.chapter].name.toUpperCase();
+    $('#cinematic-counter').textContent = mutation ? 'II / II' : 'I / II';
+    $('#cinematic-next').textContent = mutation ? 'Face the awakening →' : 'Face the guardian →';
+    $('#cinematic-skip').textContent = 'Skip cinematic →';
+  }
+  updatePresentation();
+  requestAnimationFrame(() => $('#cinematic-next').focus({ preventScroll: true }));
+}
+
+function showDialogue() {
+  const d = game.dialogue, choices = d.stage === 'choices';
+  const text = choices ? 'What would you ask?' : d.lines[d.line];
+  dialogueOverlay.innerHTML = `<div class="dialogue-portrait"><canvas width="144" height="160" aria-hidden="true"></canvas><span>${d.npc.role}</span></div><div class="dialogue-content"><div class="dialogue-heading"><span>A VOICE IN THE DARK</span><span>${choices ? 'CHOOSE YOUR WORDS' : `${d.line + 1} / ${d.lines.length}`}</span></div><h2>${d.npc.name}</h2><p class="dialogue-text">${text}</p><div class="dialogue-actions">${choices ? d.npc.choices.map((choice, i) => `<button data-dialogue-choice="${i}"><span>0${i + 1}</span>${choice.ask}<b>↗</b></button>`).join('') : '<button class="dialogue-next" data-dialogue-next>Continue <span>→</span></button>'}<button class="dialogue-leave" data-dialogue-leave>Leave conversation</button></div></div>`;
+  input.clear(); updatePresentation();
+  requestAnimationFrame(() => dialogueOverlay.querySelector('button')?.focus({ preventScroll: true }));
 }
 
 async function setSound(on) {
@@ -182,7 +244,7 @@ function showPause() {
 }
 
 function showControls() {
-  showModal(`<p class="modal-eyebrow">A LAMPLIGHTER’S FIELD GUIDE</p><h2 id="modal-title">Learn the hunt.</h2><table class="controls-table"><thead><tr><th>ACTION</th><th>KEYBOARD / MOUSE</th><th>CONTROLLER</th></tr></thead><tbody>${CONTROLS.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="mechanics-grid"><div><h3>Take your breath.</h3><p>Attacking, parrying, and dodging spend stamina. Stop attacking to recover it. Press J near the end of a swing to chain up to three strikes.</p></div><div><h3>Read the warning.</h3><p>Amber wind-ups can be parried. Press L just before impact, then strike for a riposte. Violet attacks and ground waves must be dodged or jumped.</p></div><div><h3>Reclaim what is yours.</h3><p>The pale portion of lost health can be reclaimed by striking back within four seconds. Dying drops your echoes; reach them before dying again.</p></div><div><h3>A little light.</h3><p>Rest at lamps to refill health and tinctures, set your checkpoint, and buy upgrades. Resting revives common enemies. Jump, then dodge for extra distance.</p></div></div><div class="modal-actions"><button class="primary-button" data-modal-action="close">I am ready <span>→</span></button><button class="text-button" data-modal-action="settings">Accessibility & difficulty</button></div>`, { wide: true, kind: 'controls', onClose: modalState?.onClose });
+  showModal(`<p class="modal-eyebrow">A LAMPLIGHTER’S FIELD GUIDE</p><h2 id="modal-title">Learn the hunt.</h2><table class="controls-table"><thead><tr><th>ACTION</th><th>KEYBOARD / MOUSE</th><th>CONTROLLER</th></tr></thead><tbody>${CONTROLS.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table><div class="mechanics-grid"><div><h3>Move like a memory.</h3><p>Hold W/A/S/D and dash with Shift. One directional air step recharges on landing. Jump out of a grounded dash, or press J during it for a sweeping Wakecut.</p></div><div><h3>Fall like a bell.</h3><p>Press K in the air for Bellfall: a plunging strike and a landing shockwave. It spends stamina and commits you to the descent. Mind the gaps below.</p></div><div><h3>Read the warning.</h3><p>Amber wind-ups can be parried just before impact, then punished with a riposte. Violet attacks and ground waves must be dodged or jumped. Bosses physically transform at half health.</p></div><div><h3>Listen to the living.</h3><p>Speak to the survivor in each district with E. They offer advice, memories and a one-time gift of echoes. Rest at lamps to refill your health and buy upgrades.</p></div></div><div class="modal-actions"><button class="primary-button" data-modal-action="close">I am ready <span>→</span></button><button class="text-button" data-modal-action="settings">Accessibility & difficulty</button></div>`, { wide: true, kind: 'controls', onClose: modalState?.onClose });
 }
 
 function showChapters() {
@@ -191,7 +253,7 @@ function showChapters() {
 
 function showJournal() {
   const notes = game.save.notes, defeated = game.save.defeated;
-  showModal(`<p class="modal-eyebrow">WHAT THE CITY REMEMBERS</p><h2 id="modal-title">The archive.</h2><p class="prose small">You are Vesper’s last lamplighter. Your sister Mara rang the forbidden hundredth bell. These are the truths you have brought back from the dark.</p>${CHAPTERS.map((chapter, i) => `<article class="journal-note"><small>CHAPTER ${ROMAN[i]} · ${chapter.name.toUpperCase()}</small><h3>${notes.includes(i) ? chapter.note.title : 'An unwritten memory'}</h3><p>${notes.includes(i) ? chapter.note.text : 'Find the forgotten letter in this district.'}</p>${defeated.includes(i) ? `<div class="modal-rule"></div><h3>${chapter.boss.name}</h3><p>${chapter.bossAfter}</p>` : ''}</article>`).join('')}${game.save.ending ? `<article class="journal-note"><h3>${ENDINGS[game.save.ending].title}</h3><p>${ENDINGS[game.save.ending].text}</p></article>` : ''}<div class="modal-actions"><button class="primary-button" data-modal-action="close">Close the archive</button></div>`, { kind: 'journal' });
+  showModal(`<p class="modal-eyebrow">WHAT THE CITY REMEMBERS</p><h2 id="modal-title">The archive.</h2><p class="prose small">You are Vesper’s last lamplighter. Your sister Mara rang the forbidden hundredth bell. These are the truths you have brought back from the dark.</p>${CHAPTERS.map((chapter, i) => `<article class="journal-note"><small>CHAPTER ${ROMAN[i]} · ${chapter.name.toUpperCase()}</small><h3>${notes.includes(i) ? chapter.note.title : 'An unwritten memory'}</h3><p>${notes.includes(i) ? chapter.note.text : 'Find the forgotten letter in this district.'}</p>${game.save.talked.includes(i) ? `<div class="modal-rule"></div><h3>${NPCS[i].name} · ${NPCS[i].role}</h3><p>${NPCS[i].intro.join(' ')}</p>${NPCS[i].choices.map(choice => `<h4>${choice.ask}</h4><p>${choice.answer.join(' ')}</p>`).join('')}` : ''}${defeated.includes(i) ? `<div class="modal-rule"></div><h3>${chapter.boss.name}</h3><p>${chapter.bossAfter}</p>` : ''}</article>`).join('')}${game.save.ending ? `<article class="journal-note"><h3>${ENDINGS[game.save.ending].title}</h3><p>${ENDINGS[game.save.ending].text}</p></article>` : ''}<div class="modal-actions"><button class="primary-button" data-modal-action="close">Close the archive</button></div>`, { kind: 'journal' });
 }
 
 function showSettings() {
@@ -255,6 +317,19 @@ document.querySelectorAll('[data-chapter]').forEach(button => button.addEventLis
   showChapters();
 }));
 $('#begin-button').addEventListener('click', startGame);
+$('#prologue-button').addEventListener('click', async () => {
+  if (!soundChosen) await setSound(true); else if (settings.sound) await audio.unlock();
+  game.beginPrologue(true);
+});
+$('#cinematic-next').addEventListener('click', () => game.advanceCinematic());
+$('#cinematic-skip').addEventListener('click', () => game.advanceCinematic(true));
+dialogueOverlay.addEventListener('click', e => {
+  const button = e.target.closest('button');
+  if (!button) return;
+  if (button.hasAttribute('data-dialogue-leave')) game.advanceDialogue('leave');
+  else if (button.hasAttribute('data-dialogue-choice')) game.advanceDialogue(Number(button.dataset.dialogueChoice));
+  else if (button.hasAttribute('data-dialogue-next')) game.advanceDialogue();
+});
 $('#new-button').addEventListener('click', showNewConfirmation);
 $('#pause-button').addEventListener('click', showPause);
 $('#sound-button').addEventListener('click', () => { soundChosen = true; void setSound(!settings.sound); });
@@ -308,6 +383,7 @@ modal.addEventListener('click', async e => {
       closeModal(false);
       game = new Game(imported, settings, gameEvent);
       persistenceEnabled = true;
+      audio.theme(0);
       saveProgress(); updatePresentation();
       toast('Pilgrimage restored. Continue when you are ready.');
     }
@@ -339,6 +415,20 @@ modal.addEventListener('change', async e => {
 });
 
 document.addEventListener('keydown', e => {
+  if (!modalState && ['cinematic', 'dialogue'].includes(game.mode)) {
+    if (e.repeat) return;
+    if (['Space', 'Enter', 'KeyE'].includes(e.code)) {
+      e.preventDefault();
+      if (game.mode === 'cinematic') game.advanceCinematic();
+      else if (game.dialogue.stage !== 'choices') game.advanceDialogue();
+      else if (document.activeElement instanceof HTMLButtonElement && dialogueOverlay.contains(document.activeElement)) document.activeElement.click();
+    } else if (e.code === 'Escape') {
+      e.preventDefault();
+      if (game.mode === 'cinematic') game.advanceCinematic(true);
+      else game.advanceDialogue('leave');
+    }
+    return;
+  }
   if (!modalState) return;
   if (e.code === 'Escape' && modalState.dismiss) { e.preventDefault(); closeModal(); }
   if (e.code === 'Tab') {
@@ -352,13 +442,15 @@ document.addEventListener('keydown', e => {
 modalLayer.addEventListener('click', e => { if (e.target === modalLayer && modalState?.dismiss) closeModal(); });
 
 document.addEventListener('visibilitychange', () => {
+  if (game.cinematic) game.cinematic.suspended = document.hidden;
   if (document.hidden) {
     if (game.mode === 'playing') showPause();
     saveProgress();
     void audio.suspend().catch(error => toast(`Audio pause failed: ${error.message}`));
   } else if (settings.sound) void audio.unlock();
 });
-window.addEventListener('blur', () => { if (game.mode === 'playing') showPause(); });
+window.addEventListener('blur', () => { if (game.mode === 'playing') showPause(); if (game.cinematic) game.cinematic.suspended = true; });
+window.addEventListener('focus', () => { if (game.cinematic) game.cinematic.suspended = false; });
 window.addEventListener('beforeunload', saveProgress);
 window.addEventListener('gamepadconnected', () => toast('Controller connected. Move with the left stick; A to jump, X to strike.'));
 window.addEventListener('gamepaddisconnected', () => { if (game.mode === 'playing') showPause(); toast('Controller disconnected. Keyboard and touch controls remain available.'); });
@@ -372,13 +464,17 @@ function updateHUD() {
   $('#health-value').textContent = `${Math.ceil(p.hp)} / ${game.maxHp}`;
   $('#flask-value').textContent = p.flasks;
   $('#echo-value').textContent = game.save.echoes.toLocaleString();
+  $('#air-step-state').textContent = p.airDash ? '◇ AIR STEP READY' : '· TOUCH GROUND TO RECHARGE';
+  $('#movement-name').textContent = p.plunge ? 'BELLFALL ↓' : p.dashStrike > 0 ? 'WAKECUT' : p.dash > 0 ? 'LANTERN STEP' : '';
+  $('#objective-hud').textContent = !game.save.talked.includes(game.save.chapter) && p.x < 500 ? `Speak to ${game.npc.name}` : game.boss.hp <= 0 ? game.save.chapter === 4 ? 'Find Mara beyond the heart' : 'The way opens. Enter the next district.' : `Find ${game.level.boss.name}`;
+  $('#music-credit').textContent = settings.sound ? audio.trackTitle : 'SOUND MUTED';
   const boss = game.boss;
   $('#boss-hud').hidden = !boss.active || boss.hp <= 0;
   if (boss.active) {
-    $('#boss-name').textContent = boss.name;
+    $('#boss-name').textContent = boss.phase === 2 ? boss.drama.mutation : boss.name;
     $('#boss-fill').style.width = `${boss.hp / boss.maxHp * 100}%`;
     $('#boss-health').textContent = `${Math.ceil(boss.hp)} / ${boss.maxHp}`;
-    $('#boss-phase').textContent = boss.phase === 2 ? 'THE NIGHTMARE DEEPENS' : 'FALLEN GUARDIAN';
+    $('#boss-phase').textContent = boss.phase === 2 ? 'MUTATED · PHASE II' : 'FALLEN GUARDIAN · PHASE I';
   }
   const interaction = game.interaction;
   $('#interact-prompt').hidden = !interaction || !!modalState || !$('#chapter-announcement').hidden;
@@ -400,7 +496,7 @@ function frameLoop(now) {
   if (!input.active) {
     const next = input.take('uiNext'), previous = input.take('uiPrevious');
     if (next || previous) {
-      const container = modalState ? modal : $('#home-screen');
+      const container = modalState ? modal : game.cinematic ? cinematicOverlay : game.dialogue ? dialogueOverlay : $('#home-screen');
       const buttons = [...container.querySelectorAll('button:not(:disabled), select, input:not([hidden])')].filter(element => element.offsetParent !== null);
       if (buttons.length) {
         const current = buttons.indexOf(document.activeElement);
@@ -408,10 +504,14 @@ function frameLoop(now) {
       }
     }
     if (input.take('uiConfirm')) {
-      const target = document.activeElement instanceof HTMLButtonElement ? document.activeElement : !modalState ? $('#begin-button') : modal.querySelector('button:not(.modal-close):not(:disabled)');
+      const target = document.activeElement instanceof HTMLButtonElement ? document.activeElement : game.cinematic ? $('#cinematic-next') : game.dialogue ? dialogueOverlay.querySelector('button') : !modalState ? $('#begin-button') : modal.querySelector('button:not(.modal-close):not(:disabled)');
       target?.click();
     }
-    if (input.take('uiBack') && modalState?.dismiss) closeModal();
+    if (input.take('uiBack')) {
+      if (modalState?.dismiss) closeModal();
+      else if (game.mode === 'cinematic') game.advanceCinematic(true);
+      else if (game.mode === 'dialogue') game.advanceDialogue('leave');
+    }
   }
   if (input.take('pause')) {
     if (game.mode === 'playing') showPause();
@@ -433,6 +533,11 @@ function frameLoop(now) {
   }
   if (stepped) input.endFrame();
   renderer.render(game, settings.reducedMotion && game.mode === 'menu' ? 8 : visualTime);
+  if (game.cinematic) $('#cinematic-progress-fill').style.width = `${Math.min(100, game.cinematic.elapsed / game.cinematic.duration * 100)}%`;
+  if (game.dialogue && hudFrame % 6 === 0) {
+    const portrait = dialogueOverlay.querySelector('canvas');
+    if (portrait) drawPortrait(portrait.getContext('2d'), game.dialogue.npc, settings.reducedMotion ? 8 : visualTime);
+  }
   if (hudFrame++ % 3 === 0 && game.mode !== 'menu') updateHUD();
   requestAnimationFrame(frameLoop);
 }

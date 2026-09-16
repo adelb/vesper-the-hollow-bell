@@ -1,6 +1,6 @@
 # Vesper — The Hollow Bell
 
-An original, single-player gothic pixel-art action platformer for the browser. Five complete districts, five two-phase bosses, and a story with two endings. Inspired by the atmosphere and deliberate combat of gothic soulslikes; no Bloodborne characters, locations, assets, music, or story are used.
+An original, single-player gothic pixel-art action platformer for the browser. **Reawakening / 1.1** expands the five-district campaign with an illustrated prologue, five survivors, fifteen enemy designs, directional air dashes, and five bosses that physically transform. Inspired by the atmosphere and deliberate combat of gothic soulslikes; no Bloodborne characters, locations, assets, music, or story are used.
 
 ## Play
 
@@ -13,22 +13,37 @@ A modern browser with Canvas 2D and Web Audio is required. Keyboard/mouse, stand
 | Move | A / D or arrow keys | Left stick / D-pad |
 | Jump | Space / W / Up | A / Cross |
 | Light attack; chain three strikes | J / left mouse | X / Square |
-| Heavy attack | K / right mouse | Y / Triangle |
-| Dodge | Shift | B / Circle |
+| Heavy attack; Bellfall while airborne | K / right mouse | Y / Triangle |
+| Directional dash / air step | Direction + Shift | Left stick + B / Circle |
+| Wakecut | Light attack during a dash | X / Square during a dash |
 | Parry | L / Q | LB / L1 |
 | Heal | F | RB / R1 |
-| Rest, read, enter | E | D-pad up |
+| Rest, talk, read, enter | E | D-pad up |
 | Pause | Escape / P | Start |
 
-Use the D-pad to navigate menus, A/Cross to select, and B/Circle to close dismissible dialogs. Touch players have on-screen action buttons.
+Use the D-pad to navigate menus and conversations, A/Cross to select, and B/Circle to close dismissible dialogs or skip a cinematic. Touch players have on-screen action buttons, including up/down dash aiming. The controller's left-stick up and the touch up arrow aim without jumping; keyboard W/Up retains its jump shortcut. Space/Enter advances story scenes, Escape skips, and Tab selects dialogue choices.
+
+**Advanced movement:** aim dashes with W/A/S/D or arrows, including diagonals. A dash costs 23 stamina and briefly avoids damage; one air step is available until landing. Jump during a grounded dash to cancel into a forward leap. Attack during a dash to perform **Wakecut**, a longer-reaching silver slash with spectral afterimages. Heavy-attack in the air to commit to **Bellfall**: a downward plunge followed by a two-sided landing shockwave. Keep enough stamina for an escape.
+
+## The story
+
+Vesper asked a bell to prevent death. Ninety-nine years later, the unpaid debt is waking beneath the city. Follow your sister Mara's lantern through five districts, discover why she entered the living heart, and choose between returning the dawn and becoming its keeper.
+
+A five-scene illustrated prologue introduces the bargain, Mara, and the hundredth toll. Advance it yourself, let it play, or skip it; **Watch the prologue** on the title replays it without restarting your campaign. Meet **Orren, Ilex, Sister Nera, Cael, and Mara** near the first lamp of their districts. Conversations have portraits, selectable questions, practical combat advice, and new lines after each guardian's defeat. Finishing a survivor's opening conversation grants a one-time gift of echoes and archives their words. Combat pauses during conversations and cinematics.
 
 ## The pilgrimage
 
-1. **The Gaslit Ward** — The Lantern Warden: sweeps and charging cleaver strikes.
-2. **The Weeping Garden** — The Briar Widow: root-limbed lunges, leaps, and a second-phase nova.
-3. **The Drowned Choir** — Cantor of the Deep: fanned hymns and ground waves.
-4. **The Astral Spire** — The Unseeing Astronomer: marked astral strikes, projectiles, and teleportation.
-5. **The Hollow Heart** — The Heart of Vesper: a final combination of charging, leaping, and astral patterns.
+| District | Guardian | Second awakening |
+|---|---|---|
+| The Gaslit Ward | The Lantern Warden | **The Cinder Seraph** unfolds burning wings and fires cinder volleys. |
+| The Weeping Garden | The Briar Widow | **Mother of Thorns** flowers into a thorn-crowned body and uproots the arena. |
+| The Drowned Choir | Cantor of the Deep | **The Thousand-Voiced** opens a many-faced halo and sends tides in both directions. |
+| The Astral Spire | The Unseeing Astronomer | **The Unbound Constellation** becomes an orbit of eyes and bends eclipse bolts. |
+| The Hollow Heart | The Heart of Vesper | **The City Unmade** opens six living wings and releases curved rapture bolts. |
+
+Each guardian receives a named, letterboxed entrance with a camera close-up, a story line, and a musical sting. At half health, a protected transformation changes their silhouette, size, identity, and attack sequence—not just their color or speed. Entrances shorten on repeat attempts. Skipping a transformation still applies its new form.
+
+Ordinary enemies have fifteen district-specific designs, from Thornhounds and Bellmouths to Rift Stalkers and Marrow Weavers. Read their different silhouettes and attack sequences: lunges, charges, spread shots, root eruptions, tides, and astral strikes.
 
 Combat uses stamina, timed invulnerability, buffered three-hit light combos, heavy attacks, parry/riposte windows, and recoverable health. Amber wind-ups are parryable; violet attacks, ground waves, and environmental hazards are not. Briefly stop attacking to regenerate stamina. Jump then dodge to cross wide gaps. Falling costs health and returns you to safe ground.
 
@@ -38,7 +53,9 @@ Rest at either lamp in a district to refill health/tinctures, save a checkpoint,
 
 ## Saves
 
-Progress uses browser `localStorage`: `vesper.save.v1` and `vesper.settings.v1`. Saves are local to the current browser and site origin, not cloud-synced. Progress autosaves at lamps, deaths, boss victories, travel, upgrades, and periodically during play. Continuing resumes at the saved lamp, not the exact position where the tab closed. Export/import JSON backups in Settings to move progress between browsers.
+Progress uses browser `localStorage`: `vesper.save.v1` and `vesper.settings.v1`. Saves are local to the current browser and site origin, not cloud-synced. Progress autosaves at lamps, deaths, boss victories, travel, upgrades, completed introductions/conversations, and periodically during play. Continuing resumes at the saved lamp, not the exact position where the tab closed. Export/import JSON backups in Settings to move progress between browsers.
+
+**Existing 1.0 saves are preserved.** The new `talked`, `introduced`, and `prologueSeen` fields migrate automatically, retaining upgrades, echoes, cleared guardians, and endings. Returning players see the new prologue once and can skip it; no new pilgrimage is required.
 
 If storage is blocked, full, or corrupt, the game displays a warning. Corrupt saves are not silently overwritten; play becomes session-only until the player explicitly starts a new pilgrimage or imports a valid save. Export before closing a session-only game.
 
@@ -68,7 +85,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Set `VESPER_URL` to check a production URL instead. Development checks exercise movement, jumping, attacks, menus, settings, upgrades, death/recovery, five boss-to-gate transitions, an ending, reload persistence, audio initialization, and touch layouts. Unit tests cover full-health boss defeat, collision, every mandatory platform gap, combat rules, both endings, and save validation. Screenshots are written to the ignored `test-results` directory. The engine inspection hook exists only in development builds.
+Set `VESPER_URL` to check a production URL instead. Development checks exercise keyboard movement combos, all five rendered survivor encounters, boss entrances and physical mutations, all gates, an ending, upgrades, death/recovery, controller menus, and touch layouts. They also compare animated/reduced-motion background frames and render all five instruments to audio buffers to detect silence or clipping. Public-build checks cover the prologue, menus, old-save migration, persistence, controller navigation, and mobile presentation. Unit tests cover full-health boss defeat, collision, every mandatory platform gap, combat rules, cinematics, NPC gifts, both endings, and save validation. Screenshots are written to the ignored `test-results` directory. The engine inspection hook exists only in development builds.
 
 ## Hosting
 
@@ -81,10 +98,20 @@ The game is entirely static. `npm run build` produces `dist`, with relative asse
 
 ## Art, sound, and implementation
 
-All game scenery, architecture, sprites, animations, weather, and effects are generated by the original Canvas renderer. Five chapter palettes use cached parallax scenery, carved gothic windows, stepped moon textures, atmospheric lighting, and articulated pixel characters. Blender is not required for this native 2D art pipeline.
+All game scenery, architecture, sprites, animations, weather, and effects are generated by the original Canvas renderer. Articulated hunter sprites have a feathered hat, half-mask, moving coat, lantern, curved sabre, and move-specific poses. Survivor portraits and both forms of every boss use the same original pixel-art vocabulary. Blender is not required for this native 2D art pipeline.
 
-The original soundtrack is synthesized locally with Web Audio: five chapter motifs, detuned drones, additive bells, procedural convolution reverb, and a faster rhythmic layer during boss encounters. Combat sound effects are synthesized too; no downloaded music or sound packs are used.
+Cached parallax scenery is layered with moving clock hands and suspended bells, swaying vines and petals, waterfalls and ripples, rotating celestial instruments and floating masonry, or breathing arches and luminous pulses. Reduced-motion settings freeze animated environmental layers.
+
+The soundtrack is synthesized locally with Web Audio. Each location has its own melody, chord progression, meter, instrumentation, and accompaniment, plus separate guardian and mutation arrangements. Score changes crossfade; cinematic stings and movement/combat effects are synthesized too. No downloaded music or sound packs are used.
+
+| District | Original score | Lead sound |
+|---|---|---|
+| Gaslit Ward | Gaslight, in Three | Felt piano |
+| Weeping Garden | Seeds for a Tomorrow | Harp |
+| Drowned Choir | A Hymn Below the Water | Synthesized choir |
+| Astral Spire | The Seventh Unmoving Star | Glass and bells |
+| Hollow Heart | Everything We Could Not Keep | Strings |
 
 Cormorant Garamond and DM Sans are bundled locally under their SIL Open Font Licenses. Copyright notices and licenses are included in `public/fonts`. The finished game makes no third-party runtime font or media requests.
 
-Core files: `src/game.js` (simulation), `src/renderer.js` (art), `src/audio.js` (score/effects), `src/content.js` (campaign), `src/input.js` (devices), `src/storage.js` (persistence), and `src/main.js` (UI).
+Core files: `src/game.js` (simulation, movement, encounters, cinematic/dialogue states), `src/renderer.js` (composition, scenery, camera and prologue plates), `src/art.js` (drawing primitives), `src/actors.js` (characters, enemies, bosses and portraits), `src/world.js` (animated environments), `src/audio.js` (score/effects), `src/content.js` (campaign and conversations), `src/input.js` (devices), `src/storage.js` (persistence), and `src/main.js` (UI).

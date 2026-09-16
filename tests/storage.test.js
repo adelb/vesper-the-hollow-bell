@@ -49,3 +49,19 @@ test('settings constrain volumes and option values', () => {
   assert.equal(settings.touch, 'on');
   assert.equal(settings.shake, false);
 });
+
+test('original release saves migrate without resetting campaign progress', () => {
+  const old = { ...freshSave(), started: true, chapter: 3, unlocked: 3, defeated: [0, 1, 2], vitality: 2, blade: 3, echoes: 422 };
+  delete old.talked; delete old.introduced; delete old.prologueSeen;
+  const migrated = validateSave(old);
+  assert.equal(migrated.chapter, 3);
+  assert.equal(migrated.echoes, 422);
+  assert.equal(migrated.blade, 3);
+  assert.deepEqual(migrated.talked, []);
+  assert.deepEqual(migrated.introduced, []);
+  assert.equal(migrated.prologueSeen, false);
+});
+
+test('new narrative state rejects corrupt flags and invalid character references', () => {
+  for (const bad of [{ talked: [7] }, { talked: null }, { introduced: 'all' }, { prologueSeen: 'yes' }, { prologueSeen: null }]) assert.throws(() => validateSave({ ...freshSave(), ...bad }));
+});

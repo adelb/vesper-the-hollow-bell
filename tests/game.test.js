@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Game } from '../src/game.js';
 import { freshSave, DEFAULT_SETTINGS } from '../src/storage.js';
-import { CHAPTERS } from '../src/content.js';
+import { CHAPTERS, PROLOGUE, ENEMY_CAST, NPCS } from '../src/content.js';
+import { SCORES, AudioEngine } from '../src/audio.js';
 
 function setup(overrides = {}) {
   const events = [];
-  const game = new Game({ ...freshSave(), ...overrides }, { ...DEFAULT_SETTINGS }, event => events.push(event));
+  const game = new Game({ ...freshSave(), prologueSeen: true, ...overrides }, { ...DEFAULT_SETTINGS }, event => events.push(event));
   game.start();
   game.player.invulnerable = 0;
   return { game, events };
@@ -298,8 +299,7 @@ test('letters are collected once and do not block progression', () => {
   assert.equal(game.interaction, null);
 });
 
-test('all bosses telegraph, enter a second phase, and use distinct attack sets', () => {
-  const expected = [['sweep', 'charge'], ['sweep', 'leap', 'nova'], ['song', 'sweep'], ['nova', 'meteor'], ['charge', 'nova', 'leap', 'sweep']];
+test('all bosses telegraph, physically mutate through a protected cinematic, and gain new attack sets', () => {
   for (let i = 0; i < 5; i++) {
     const { game } = setup({ chapter: i, unlocked: 4 });
     const boss = game.boss;
@@ -312,10 +312,17 @@ test('all bosses telegraph, enter a second phase, and use distinct attack sets',
     assert.ok(boss.timer > 0.4);
     boss.hp = boss.maxHp * 0.49;
     game.update(1 / 60);
+    assert.equal(game.mode, 'cinematic');
+    assert.equal(game.cinematic.kind, 'mutation');
+    const height = boss.h;
+    advance(game, 2.2);
     assert.equal(boss.phase, 2);
+    assert.ok(boss.h > height);
+    game.advanceCinematic(true);
+    assert.equal(game.mode, 'playing');
     const patterns = new Set();
     for (let n = 1; n <= 12; n++) { boss.attackCount = n; patterns.add(game.patternFor(boss)); }
-    for (const pattern of expected[i]) assert.ok(patterns.has(pattern), `chapter ${i} missing ${pattern}`);
+    for (const pattern of boss.drama.patterns) assert.ok(patterns.has(pattern), `chapter ${i} missing ${pattern}`);
   }
 });
 
@@ -359,7 +366,10 @@ test('complete campaign: all five guardians unlock the next gate, persist and re
     game.player.facing = 1;
     game.player.attackKind = 'heavy';
     let hits = 0;
-    while (boss.hp > 0 && hits++ < 50) { game.player.hit.clear(); game.strike(); }
+    while (boss.hp > 0 && hits++ < 50) {
+      game.player.hit.clear(); game.strike();
+      if (boss.phase === 1 && boss.hp <= boss.maxHp * 0.5) { game.updateEnemy(boss, 1 / 60); game.advanceCinematic(true); }
+    }
     assert.equal(boss.hp, 0);
     assert.ok(game.save.defeated.includes(i));
     assert.equal(game.save.unlocked, Math.min(4, i + 1));
@@ -379,6 +389,194 @@ test('complete campaign: all five guardians unlock the next gate, persist and re
   assert.ok(events.filter(e => e.type === 'victory').length === 5);
   const restored = new Game(game.save, game.settings);
   assert.equal(restored.boss.hp, 0);
+});
+
+test('opening prologue tells five memories, freezes gameplay and persists completion', () => {
+  const events = [];
+  const game = new Game(freshSave(), { ...DEFAULT_SETTINGS }, e => events.push(e));
+  game.start();
+  assert.equal(game.mode, 'cinematic');
+  assert.equal(game.cinematic.kind, 'prologue');
+  const x = game.player.x;
+  advance(game, 1, controls(['right'], ['attack']));
+  assert.equal(game.player.x, x);
+  for (let i = 0; i < PROLOGUE.length; i++) {
+    assert.equal(game.cinematic.index, i);
+    game.advanceCinematic();
+  }
+  assert.equal(game.mode, 'playing');
+  assert.equal(game.save.prologueSeen, true);
+  assert.ok(events.some(e => e.type === 'chapter'));
+  game.mode = 'menu';
+  game.beginPrologue(true);
+  game.advanceCinematic(true);
+  assert.equal(game.mode, 'menu');
+  assert.equal(game.save.chapter, 0);
+});
+
+test('cinematics pause when suspended and skipping a mutation still applies its new form', () => {
+  const { game } = setup();
+  game.boss.active = true;
+  game.beginBossCinematic('mutation');
+  game.cinematic.suspended = true;
+  advance(game, 6);
+  assert.equal(game.cinematic.elapsed, 0);
+  assert.equal(game.boss.phase, 1);
+  game.advanceCinematic(true);
+  assert.equal(game.boss.phase, 2);
+  assert.deepEqual([game.boss.w, game.boss.h], game.boss.drama.size);
+  assert.equal(game.mode, 'playing');
+});
+
+test('boss entrances freeze danger and shorten on later attempts', () => {
+  const { game } = setup();
+  game.player.x = game.level.arena;
+  game.update(1 / 60);
+  assert.equal(game.cinematic.kind, 'boss-intro');
+  assert.equal(game.cinematic.duration, 6.2);
+  assert.deepEqual(game.save.introduced, [0]);
+  game.player.invulnerable = 0;
+  assert.equal(game.hurtPlayer(50, game.boss, false), false);
+  game.advanceCinematic(true);
+  game.die(); game.respawn();
+  game.player.x = game.level.arena;
+  game.update(1 / 60);
+  assert.equal(game.cinematic.duration, 3.2);
+});
+
+test('massive first-phase strikes cannot skip a guardian’s transformation', () => {
+  const { game } = setup({ blade: 5 });
+  game.boss.active = true; game.boss.hp = game.boss.maxHp * 0.55; game.boss.stagger = 2;
+  game.player.x = game.boss.x - 35; game.player.attackKind = 'heavy';
+  game.strike();
+  assert.equal(game.boss.hp, game.boss.maxHp * 0.5);
+  assert.equal(game.save.defeated.length, 0);
+  game.updateEnemy(game.boss, 1 / 60);
+  assert.equal(game.cinematic.kind, 'mutation');
+});
+
+test('directional air steps aim diagonally, are normalized and recharge only on landing', () => {
+  const { game } = setup();
+  game.enemies = [];
+  game.player.y = 240; game.player.grounded = false; game.player.coyote = 0;
+  game.update(1 / 60, controls(['right', 'up'], ['dash']));
+  assert.ok(game.player.vx > 350 && game.player.vx < 450);
+  assert.ok(game.player.vy < -350 && game.player.vy > -450);
+  assert.equal(game.player.airDash, false);
+  assert.ok(Math.abs(Math.hypot(game.player.dashX, game.player.dashY) - 1) < 0.001);
+  game.player.dash = 0; game.player.dashCooldown = 0;
+  game.update(1 / 60, controls(['right'], ['dash']));
+  assert.equal(game.player.dash, 0);
+  game.player.x = 155;
+  advance(game, 1.5);
+  assert.equal(game.player.airDash, true);
+});
+
+test('controller and touch upward aim do not jump before dashing', () => {
+  for (const lastDevice of ['gamepad', 'touch']) {
+    const { game } = setup();
+    const input = { ...controls(['up'], ['up']), lastDevice };
+    game.update(1 / 60, input);
+    assert.equal(game.player.grounded, true);
+    assert.equal(game.player.y, 404);
+    game.update(1 / 60, { ...controls(['up'], ['dash']), lastDevice });
+    assert.equal(game.player.dashY, -1);
+    assert.equal(game.player.grounded, false);
+    assert.equal(game.player.airDash, false);
+  }
+});
+
+test('jump cancels a ground dash while preserving forward momentum', () => {
+  const { game } = setup();
+  game.update(1 / 60, controls(['right'], ['dash']));
+  game.update(1 / 60, controls(['right', 'jump'], ['jump']));
+  assert.equal(game.player.dash, 0);
+  assert.equal(game.player.grounded, false);
+  assert.ok(game.player.vy < -600);
+  assert.ok(game.player.vx > 220);
+});
+
+test('Wakecut cancels into a long-reaching dash attack with its own visual effects', () => {
+  const { game } = setup();
+  const e = game.enemies[0]; e.x = game.player.x + 100;
+  game.update(1 / 60, controls(['right'], ['dash']));
+  game.update(1 / 60, controls(['right'], ['attack']));
+  assert.equal(game.player.attackKind, 'wakecut');
+  assert.ok(game.player.dashStrike > 0);
+  advance(game, 0.14, controls(['right']));
+  assert.ok(e.hp < e.maxHp);
+  assert.ok(game.rings.length > 0);
+});
+
+test('Bellfall commits to an aerial plunge and strikes enemies on both sides of landing', () => {
+  const { game } = setup();
+  game.player.x = 155; game.player.y = 240; game.player.grounded = false; game.player.coyote = 0;
+  const e = game.enemies[0];
+  e.x = 220; e.patrolMin = 220; e.patrolMax = 220; e.stagger = 3;
+  game.update(1 / 60, controls([], ['heavy']));
+  assert.equal(game.player.plunge, true);
+  advance(game, 0.6);
+  assert.equal(game.player.plunge, false);
+  assert.ok(e.hp < e.maxHp);
+  assert.ok(game.rings.length > 0);
+});
+
+test('five unique survivors offer branching dialogue and persistent one-time gifts', () => {
+  assert.equal(new Set(NPCS.map(n => n.id)).size, 5);
+  for (let chapter = 0; chapter < 5; chapter++) {
+    const { game } = setup({ chapter, unlocked: 4 });
+    game.player.x = game.npc.x; game.player.y = game.npc.y - game.player.h;
+    assert.equal(game.interaction.kind, 'npc');
+    game.interact();
+    assert.equal(game.mode, 'dialogue');
+    assert.ok(Math.abs(game.player.x - game.npc.x) >= 60, 'Conversation should frame both actors separately');
+    assert.equal(game.player.y + game.player.h, game.npc.y);
+    const x = game.player.x;
+    advance(game, 1, controls(['right'], ['attack']));
+    assert.equal(game.player.x, x);
+    while (game.dialogue.stage !== 'choices') game.advanceDialogue();
+    assert.equal(game.save.echoes, game.npc.gift);
+    assert.deepEqual(game.save.talked, [chapter]);
+    for (const choice of [0, 1]) {
+      assert.equal(game.advanceDialogue(choice), true);
+      assert.equal(game.dialogue.stage, 'answer');
+      while (game.dialogue.stage !== 'choices') game.advanceDialogue();
+    }
+    game.advanceDialogue('leave');
+    assert.equal(game.mode, 'playing');
+    game.beginDialogue();
+    while (game.dialogue.stage !== 'choices') game.advanceDialogue();
+    assert.equal(game.save.echoes, game.npc.gift);
+    game.advanceDialogue('leave');
+    game.save.defeated.push(chapter); game.beginDialogue();
+    assert.deepEqual(game.dialogue.lines, game.npc.after);
+  }
+});
+
+test('districts have fifteen named enemy designs with distinct encounter patterns', () => {
+  const species = ENEMY_CAST.flatMap(cast => Object.values(cast));
+  assert.equal(species.length, 15);
+  assert.equal(new Set(species.map(s => s.id)).size, 15);
+  assert.ok(new Set(species.map(s => s.patterns.join(','))).size >= 10);
+  for (let i = 0; i < 5; i++) {
+    const { game } = setup({ chapter: i, unlocked: 4 });
+    for (const enemy of game.enemies) {
+      assert.equal(enemy.species, ENEMY_CAST[i][enemy.kind]);
+      enemy.attackCount = 1;
+      assert.equal(game.patternFor(enemy), enemy.species.patterns[0]);
+    }
+  }
+});
+
+test('each location has a unique score, instrumentation, meter, melody and boss arrangements', () => {
+  for (const key of ['title', 'instrument', 'meter']) assert.equal(new Set(SCORES.map(s => s[key])).size, 5);
+  assert.equal(new Set(SCORES.map(s => s.melody.join(','))).size, 5);
+  const audio = new AudioEngine({ ...DEFAULT_SETTINGS }, () => {});
+  for (let i = 0; i < 5; i++) {
+    audio.theme(i); assert.equal(audio.trackTitle, SCORES[i].title);
+    audio.theme(i, true); assert.equal(audio.trackTitle, SCORES[i].boss);
+    audio.theme(i, true, 2); assert.equal(audio.trackTitle, SCORES[i].mutation);
+  }
 });
 
 test('paused and menu states do not advance enemies or player physics', () => {

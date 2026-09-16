@@ -23,13 +23,13 @@
           <button class="nav-link" data-open="journal">The archive</button>
           <button class="nav-link" data-open="controls">How to play <span>↗</span></button>
         </nav>
-        <div class="header-end"><span class="status-dot"></span> BROWSER EDITION <span class="version">/ 1.0</span></div>
+        <div class="header-end"><span class="status-dot"></span> REAWAKENING <span class="version">/ 1.1</span></div>
       </header>
 
       <main>
         <div class="above-stage"><span><i></i> AN ORIGINAL GOTHIC ACTION RPG</span><span>HEADPHONES RECOMMENDED <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 11V9a6 6 0 0 1 12 0v2M3 10h3v7H3zm11 0h3v7h-3z"/></svg></span></div>
         <section class="game-frame" id="game-frame" aria-label="Vesper game">
-          <canvas id="game" width="960" height="540" tabindex="0" aria-label="Vesper platforming game. Use A and D to move, Space to jump, J to attack, Shift to dodge, L to parry, F to heal, and E to interact."></canvas>
+          <canvas id="game" width="960" height="540" tabindex="0" aria-label="Vesper platforming game. A and D move, Space jumps, direction plus Shift dashes, J attacks or performs Wakecut during a dash, K is heavy attack or aerial Bellfall, L parries, F heals, and E interacts."></canvas>
           <div class="vignette" aria-hidden="true"></div>
           <div class="frame-corner corner-tl"></div><div class="frame-corner corner-tr"></div><div class="frame-corner corner-bl"></div><div class="frame-corner corner-br"></div>
 
@@ -44,6 +44,7 @@
                 <button class="text-button" id="new-button" hidden>Begin again</button>
               </div>
               <div class="home-details"><span>5 CHAPTERS</span><b>·</b><span>5 FALLEN GUARDIANS</span><b>·</b><span>ONE LAST BELL</span></div>
+              <button class="prologue-link" id="prologue-button"><span>▷</span> Watch the prologue <span class="prologue-duration">A CITY THAT FORGOT GOODBYE</span></button>
             </div>
             <div class="scene-caption"><span class="caption-rule"></span><span>I &nbsp; / &nbsp; THE GASLIT WARD<small>Where the lanterns burn for no one.</small></span></div>
             <div class="home-bottom"><span class="tiny-diamond">◇</span> DEATH IS A DEBT. NOT AN END.</div>
@@ -52,10 +53,13 @@
           <div class="hud" id="hud" hidden>
             <div class="player-status"><div class="hunter-seal">V</div><div class="status-bars"><div class="health-row"><span id="player-name">THE LAMPLIGHTER</span><span id="health-value">100 / 100</span></div><div class="health-track"><div id="rally-fill"></div><div id="health-fill"></div></div><div class="stamina-track"><div id="stamina-fill"></div></div></div><div class="inventory"><span title="Healing tinctures"><b class="flask-icon">♜</b> <span id="flask-value">3</span></span><span title="Carried echoes"><b class="echo-icon">✧</b> <span id="echo-value">0</span></span></div></div>
             <div class="chapter-hud"><span id="chapter-number">CHAPTER I</span><b id="chapter-title">The Gaslit Ward</b></div>
+            <div class="movement-hud"><span id="air-step-state">◇ AIR STEP READY</span><span id="movement-name">LANTERN STEP</span></div>
+            <div class="objective-hud" id="objective-hud">Speak to Orren</div>
+            <div class="music-credit" id="music-credit"></div>
             <button class="icon-button pause-button" id="pause-button" aria-label="Pause game">Ⅱ</button>
             <div class="boss-hud" id="boss-hud" hidden><div><span id="boss-phase">FALLEN GUARDIAN</span><b id="boss-name"></b><span id="boss-health"></span></div><div class="boss-track"><div id="boss-fill"></div></div></div>
             <div class="interact-prompt" id="interact-prompt" hidden><kbd>E</kbd><span></span></div>
-            <div class="keyboard-hints" id="keyboard-hints"><span><kbd>A</kbd><kbd>D</kbd> move</span><span><kbd>SPACE</kbd> jump</span><span><kbd>J</kbd> strike</span><span><kbd>SHIFT</kbd> dodge</span><span><kbd>L</kbd> parry</span><span><kbd>F</kbd> heal</span></div>
+            <div class="keyboard-hints" id="keyboard-hints"><span><kbd>A</kbd><kbd>D</kbd> move</span><span><kbd>SPACE</kbd> jump</span><span><kbd>J</kbd> strike</span><span><kbd>SHIFT</kbd> dash</span><span><kbd>L</kbd> parry</span><span><kbd>F</kbd> heal</span></div>
           </div>
 
           <div class="chapter-announcement" id="chapter-announcement" hidden><span></span><h2></h2><p></p></div>
@@ -63,10 +67,16 @@
           <div class="stage-tools"><button class="icon-button" id="sound-button" aria-label="Enable sound" title="Toggle sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM17 8c3 2 3 6 0 8M19 5c5 4 5 10 0 14"/></svg><span id="sound-state">SOUND OFF</span></button><button class="icon-button" data-open="settings" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6m-6 0v6"/></svg></button><button class="icon-button" id="fullscreen-button" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/></svg></button></div>
 
           <div class="touch-controls" id="touch-controls" hidden aria-label="Touch controls">
-            <div class="touch-movement"><button data-action="left" aria-label="Move left">◀</button><button data-action="right" aria-label="Move right">▶</button></div>
+            <div class="touch-movement"><button data-action="left" aria-label="Move left">◀</button><div class="touch-vertical"><button data-action="up" aria-label="Aim dash up">↑</button><button data-action="down" aria-label="Aim dash down">↓</button></div><button data-action="right" aria-label="Move right">▶</button></div>
             <div class="touch-utility"><button data-action="heal" aria-label="Heal">F<span>HEAL</span></button><button data-action="interact" aria-label="Interact">E<span>USE</span></button><button data-action="parry" aria-label="Parry">L<span>PARRY</span></button></div>
-            <div class="touch-combat"><button data-action="dash" aria-label="Dodge">⇢</button><button data-action="attack" aria-label="Attack">⚔</button><button data-action="jump" aria-label="Jump">↑</button><button data-action="heavy" aria-label="Heavy attack">K<span>HEAVY</span></button></div>
+            <div class="touch-combat"><button data-action="dash" aria-label="Directional dash">⇢</button><button data-action="attack" aria-label="Attack or dash Wakecut">⚔</button><button data-action="jump" aria-label="Jump">↑</button><button data-action="heavy" aria-label="Heavy attack or aerial Bellfall">K<span>HEAVY</span></button></div>
           </div>
+          <section id="cinematic-overlay" class="cinematic-overlay" hidden aria-labelledby="cinematic-title">
+            <div class="cinematic-top"><span id="cinematic-top-label">A CITY THAT FORGOT GOODBYE</span><button id="cinematic-skip">Skip prologue →</button></div>
+            <div class="cinematic-copy"><p id="cinematic-label"></p><h2 id="cinematic-title"></h2><span class="cinematic-rule"></span><p id="cinematic-speaker"></p><p id="cinematic-text"></p></div>
+            <div class="cinematic-bottom"><div class="cinematic-progress"><span id="cinematic-counter"></span><div><i id="cinematic-progress-fill"></i></div></div><button id="cinematic-next">Next memory <span>→</span></button></div>
+          </section>
+          <section id="dialogue-overlay" class="dialogue-overlay" hidden aria-label="Character conversation"></section>
           <div class="modal-layer" id="modal-layer" hidden><section class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"></section></div>
         </section>
 

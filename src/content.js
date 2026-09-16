@@ -2,6 +2,53 @@ export const WIDTH = 960;
 export const HEIGHT = 540;
 export const ROMAN = ['I', 'II', 'III', 'IV', 'V'];
 
+export const PROLOGUE = [
+  { title: 'Before the long night', label: 'VESPER, NINETY-NINE YEARS AGO', scene: 'city', chapter: 0, speaker: 'THE LAMPLIGHTER', text: 'There was a time when we feared the morning. Every sunrise meant another empty chair. So the city built a bell, and asked it for one impossible kindness: let no one leave us.', duration: 10 },
+  { title: 'A beautiful mistake', label: 'THE FIRST TOLL', scene: 'bell', chapter: 2, speaker: 'ORREN, KEEPER OF THE LAMPS', text: 'The bell answered. The dying opened their eyes. The graves stood empty. We mistook a debt for a miracle. Each year, it asked for another guardian. Each year, we gave it one.', duration: 10 },
+  { title: 'Your sister, Mara', label: 'THE LAST WINDOW WITH A LIGHT', scene: 'siblings', chapter: 0, speaker: 'MARA', text: 'You used to leave a lantern in my window. You called it a little morning. I thought, if one light could save me, perhaps one heart could save everyone.', duration: 9 },
+  { title: 'The hundredth bell', label: 'TONIGHT', scene: 'fracture', chapter: 3, speaker: 'THE LAMPLIGHTER', text: 'Mara found what the guardians were hiding. Ninety-nine years of death, waiting beneath our feet. She took her lantern into the cathedral. Then the bell rang once too often.', duration: 9 },
+  { title: 'Carry a little morning', label: 'YOUR PILGRIMAGE BEGINS', scene: 'hunter', chapter: 0, speaker: 'MARA, A VOICE IN THE DARK', text: 'If you come after me, do not come because you cannot let go. Come because you still remember how to live. I will be waiting where the city keeps its heart.', duration: 9 },
+];
+
+export const BOSS_DRAMA = [
+  { title: 'The Lantern Warden', line: 'The light stays here. So do you.', reveal: 'An oath outlived the man who made it.', mutation: 'The Cinder Seraph', mutationLine: 'The cage breaks. What he guarded was inside him.', color: '#f4bf78', size: [84, 139], patterns: ['sweep', 'charge', 'cinder', 'sweep'], cue: 'brass', transformed: 'His lantern cage unfolds into burning wings. Cinder volleys now follow his charges.' },
+  { title: 'The Briar Widow', line: 'Hush now. You will wake the children.', reveal: 'She planted a garden so nothing she loved would leave.', mutation: 'Mother of Thorns', mutationLine: 'The cradle was empty. The roots were not.', color: '#cbdca0', size: [116, 134], patterns: ['roots', 'leap', 'nova', 'sweep'], cue: 'roots', transformed: 'A thorn crown flowers from her veil. She uproots the arena beneath your feet.' },
+  { title: 'Cantor of the Deep', line: 'One more verse. Then they may rest.', reveal: 'The water took his breath, but not his congregation.', mutation: 'The Thousand-Voiced', mutationLine: 'One mouth falls silent. A hundred open.', color: '#b5e4d5', size: [91, 148], patterns: ['tidal', 'song', 'sweep', 'tidal'], cue: 'choir', transformed: 'The choir splits his vestments into a many-voiced halo. Tides now travel in both directions.' },
+  { title: 'The Unseeing Astronomer', line: 'Do not look up. It knows your name.', reveal: 'He charted the heavens, and found the city looking back.', mutation: 'The Unbound Constellation', mutationLine: 'The stars were never above him. They were waiting under his skin.', color: '#e5cef6', size: [90, 145], patterns: ['eclipse', 'meteor', 'nova', 'eclipse'], cue: 'stars', transformed: 'His body becomes an orbit of eyes and broken instruments. Eclipses bend their projectiles toward you.' },
+  { title: 'The Heart of Vesper', line: 'Please. I have only just learned to live.', reveal: 'Every life the city refused to lose. Every goodbye it could not bear.', mutation: 'The City Unmade', mutationLine: 'It remembers every death. Now it remembers yours.', color: '#f3b39e', size: [119, 148], patterns: ['rapture', 'charge', 'nova', 'leap', 'roots'], cue: 'heart', transformed: 'Its ribbed shell opens into six living wings. Rapture sends curved bolts through the arena.' },
+];
+
+export const ENEMY_CAST = [
+  { husk: { id: 'watchman', name: 'Wickless Watchman', color: '#9ba699', trim: '#cfa776', patterns: ['sweep'] }, acolyte: { id: 'censor', name: 'Ash Censor', color: '#777f77', trim: '#dcad72', patterns: ['bolt', 'spread'] }, brute: { id: 'gravebearer', name: 'Gravebearer', color: '#798d87', trim: '#c2ad87', patterns: ['sweep', 'charge'] } },
+  { husk: { id: 'thornhound', name: 'Thornhound', color: '#6d8971', trim: '#c0d09a', patterns: ['leap', 'sweep'] }, acolyte: { id: 'seedseer', name: 'Seed-Seer', color: '#77856b', trim: '#d3c09f', patterns: ['spread'] }, brute: { id: 'rootknight', name: 'Rootbound Knight', color: '#697756', trim: '#b6c98d', patterns: ['roots', 'sweep'] } },
+  { husk: { id: 'drowned', name: 'Drowned Duelist', color: '#789f9f', trim: '#c8dbcd', patterns: ['sweep', 'charge'] }, acolyte: { id: 'bellmouth', name: 'Bellmouth', color: '#56808d', trim: '#c0dcbd', patterns: ['song'] }, brute: { id: 'anchorite', name: 'Iron Anchorite', color: '#607f84', trim: '#a9c4b4', patterns: ['sweep', 'tidal'] } },
+  { husk: { id: 'riftstalker', name: 'Rift Stalker', color: '#8e809d', trim: '#dbbedf', patterns: ['blink', 'sweep'] }, acolyte: { id: 'orbitseer', name: 'Orbit Seer', color: '#817aa2', trim: '#e0d0f1', patterns: ['nova'] }, brute: { id: 'glassgolem', name: 'Prismatic Golem', color: '#7e8f9d', trim: '#dbd7f3', patterns: ['meteor', 'sweep'] } },
+  { husk: { id: 'paleorphan', name: 'Pale Mourner', color: '#bd9a90', trim: '#edc9a9', patterns: ['leap', 'sweep'] }, acolyte: { id: 'marrowweaver', name: 'Marrow Weaver', color: '#9f767b', trim: '#edbbb1', patterns: ['spread', 'bolt'] }, brute: { id: 'pulseknight', name: 'Pulse Knight', color: '#966d71', trim: '#ebbaa1', patterns: ['charge', 'roots'] } },
+];
+
+export const NPCS = [
+  { id: 'orren', name: 'Orren', role: 'Keeper of the wayward lamps', x: 278, color: '#c4ac79', portrait: 'keeper', gift: 40,
+    intro: ['That lantern. I gave it to your sister when she was small. She said the dark was not frightening if someone was waiting at the other end.', 'Mara passed here before the hundredth toll. She asked me how to break a promise without breaking the person who made it. I had no answer.', 'The Warden remembers his duty, not his name. Watch his shoulder before the cleaver falls. Your lantern can carry you through a strike. Let me show you.'],
+    choices: [{ ask: 'Teach me the lantern step.', answer: ['Hold a direction and press Shift. In the air, W and S steer the step upward or downward. Your lamp can carry one air step before your feet touch stone again.', 'Strike during the step to draw a silver Wakecut. Press K in the air to fall like a bell hammer. Never spend your last breath without knowing where you will land.'] }, { ask: 'Why did Mara go alone?', answer: ['Because she knew you would follow. And because some people find it easier to offer themselves than to ask to be loved.', 'Bring her home if you can. But listen when she tells you what home has become.'] }],
+    after: ['The Warden is quiet. For the first time in ninety-nine years, I can hear the wind through that gate.', 'Keep his name, if you find it. A guardian deserves to be remembered as more than a door.'] },
+  { id: 'ilex', name: 'Ilex', role: 'The last gardener', x: 260, color: '#b4c48e', portrait: 'gardener', gift: 45,
+    intro: ['Careful where you put your feet. The small roots are sleeping. The large ones are pretending.', 'My mother made this garden. The bell kept her alive, but it did not keep her memories. Now every flower is a child she thinks she lost.', 'Your sister brought her a little wooden bird. For one moment, the roots stopped reaching. That was the first kind thing I had seen in years.'],
+    choices: [{ ask: 'Can your mother be saved?', answer: ['I spent my whole life asking that. I never once asked whether she wanted to stay.', 'If the Widow shows you an empty cradle, do not kneel beside it. Watch the ground. Her grief has roots.'] }, { ask: 'Where did Mara go?', answer: ['Below the cathedral. She carried a heart wrapped in a gardener’s coat. It was beating in time with the bell.', 'She left me these seeds. They need sunlight. Imagine giving someone a gift that requires tomorrow.'] }],
+    after: ['The roots have let go. I thought I would feel empty. Instead, I think I am hungry.', 'I will plant the seeds when the morning comes. I have decided there will be a morning.'] },
+  { id: 'nera', name: 'Sister Nera', role: 'Ferrier of the unsung', x: 255, color: '#a4d4cd', portrait: 'ferrier', gift: 50,
+    intro: ['Do not mistake the singing for welcome. The choir has forgotten every word except stay.', 'I used to carry the dead across this water. Then the bell rang, and nobody arrived. I have kept the boat ready ever since.', 'Mara asked me to save a place for her. I told her a ferry is not a promise of death. It is a promise that nobody has to cross alone.'],
+    choices: [{ ask: 'How do I silence the choir?', answer: ['The gold note can be turned with your blade. The low tide cannot. Jump over the water’s voice.', 'When his robe opens, the whole congregation will sing through him. There will be a breath between the waves. Take it.'] }, { ask: 'What waits across the water?', answer: ['I do not know. Anyone who tells you otherwise is selling a bell.', 'But I know the weight of a hand that stops trembling when another hand takes it. Perhaps that is enough to begin.'] }],
+    after: ['Listen. Not silence. Water. We had forgotten that the river made a sound of its own.', 'When you find Mara, tell her I have not given her place away. Tell her there is no hurry.'] },
+  { id: 'cael', name: 'Cael', role: 'Apprentice to the impossible', x: 255, color: '#c5b5e2', portrait: 'scholar', gift: 55,
+    intro: ['Please do not move the instruments. They are the only things in this room that still agree on where we are.', 'My master found a constellation shaped like Vesper. Then it blinked. He has not looked through a telescope since.', 'Mara read his final chart. Five districts. Five guardians. Not a map of streets. An anatomy.'],
+    choices: [{ ask: 'The city is alive?', answer: ['It learned from us. Our fear of endings. Our hunger for more time. We built it a heart, and taught it that silence meant abandonment.', 'My master tried to show it the stars. Now the stars are trying to come through him. Move when the floor is marked. Never stand inside a promise of light.'] }, { ask: 'Is there another way?', answer: ['Mara wanted to replace the heart. You could do that. Or break the bell and return the years it borrowed.', 'Neither choice will keep everything. A choice that keeps everything is not a choice. It is how this began.'] }],
+    after: ['The instruments have stopped arguing. North is north again. Such a small, magnificent thing.', 'I am going to look at the stars with my own eyes. Not to measure them. Just to see them.'] },
+  { id: 'mara', name: 'Mara', role: 'A memory that refuses to fade', x: 270, color: '#e6b5a2', portrait: 'sister', gift: 60,
+    intro: ['Do not be frightened. This is only the part of me that remembers the way home.', 'I thought the heart needed someone brave. It needed someone willing to listen. I heard a whole city begging not to be forgotten.', 'You do not have to forgive what I did. Just promise you will make the choice I could not.'],
+    choices: [{ ask: 'I came to bring you home.', answer: ['I know. Every night, even here, I could see your lantern.', 'Home is not the place where nothing changes. It is the place where someone notices when you do. I am still your sister. Whatever happens next.'] }, { ask: 'What does the heart want?', answer: ['What everyone wants. Another morning. Someone to say its name.', 'When it changes, remember there is still a frightened thing inside all that light. Fight it. But do not hate it.'] }],
+    after: ['I can hear you without the bell between us.', 'There you are. My little morning.'] },
+];
+
 export const CHAPTERS = [
   {
     id: 'ward', name: 'The Gaslit Ward', motif: 'Smoke & stone',
@@ -74,10 +121,11 @@ export const CONTROLS = [
   ['Move', 'A / D or ← / →', 'Left stick / D-pad'],
   ['Jump', 'Space / W / ↑', 'A / Cross'],
   ['Light attack · 3-hit chain', 'J / Left mouse', 'X / Square'],
-  ['Heavy attack', 'K / Right mouse', 'Y / Triangle'],
-  ['Dodge · invulnerable start', 'Shift', 'B / Circle'],
+  ['Heavy / aerial bellfall', 'K / Right mouse', 'Y / Triangle'],
+  ['Lantern step · directional dash', 'W A S D + Shift', 'Left stick + B / Circle'],
+  ['Wakecut · dash strike', 'J during a dash', 'X / Square during a dash'],
   ['Parry · time the impact', 'L / Q', 'LB / L1'],
   ['Healing tincture', 'F', 'RB / R1'],
-  ['Rest / read / enter', 'E', 'D-pad up'],
+  ['Rest / talk / read / enter', 'E', 'D-pad up'],
   ['Pause', 'Escape / P', 'Start'],
 ];
